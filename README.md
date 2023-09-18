@@ -1,2 +1,2 @@
 # projeto-DAD
-Projeto de Desenvolvimento de Aplicações Distribuídas 2023/2024 IST
+The project for Desenvolvimento de Aplicações Distribuídas (Design and Implementation of Distributed Applications) 2023/2024 IST
