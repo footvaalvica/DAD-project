@@ -1,4 +1,4 @@
-
-DADProject/obj/*
-DADProject/bin/*
-DADProject/.vs/*
+TKVServer/obj/*
+TKVServer/bin/*
+.vs/*
+TKVServer/.vs/*
