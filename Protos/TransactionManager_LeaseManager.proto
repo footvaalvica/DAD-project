@@ -1,1 +1,16 @@
 syntax = "proto3";
+
+package TransactionManager_LeaseManagerServiceProto;
+
+message LeaseRequest {
+	string id = 1;
+	repeated string permissions = 2;
+}
+
+message LeaseResponse {
+	bool status = 1;
+}
+
+service TransactionManager_LeaseManagerService {
+	rpc Lease(LeaseRequest) returns (LeaseResponse);
+}

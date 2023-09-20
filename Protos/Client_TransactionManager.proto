@@ -1,1 +1,21 @@
 syntax = "proto3";
+
+package Client_TransactionManagerServiceProto;
+
+import "Transaction.proto";
+import "Status.proto";
+
+message TransactionRequest {
+	string id = 1;
+	repeated string reads = 2;
+	repeated DADInt writes = 3;
+}
+
+message TransactionResponse {
+	repeated DADInt response = 1;
+}
+
+service Client_TransactionManagerService {
+	rpc Submit(TransactionRequest) returns (TransactionResponse);
+	rpc Status(StatusRequest) returns (StatusResponse);
+}
