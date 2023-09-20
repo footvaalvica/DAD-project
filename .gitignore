@@ -2,3 +2,7 @@ TKVServer/obj/*
 TKVServer/bin/*
 .vs/*
 TKVServer/.vs/*
+Protos/obj/*
+TKVClient/obj/*
+TKVTransactionManager/.vs/*
+TKVTransactionManager/obj/*

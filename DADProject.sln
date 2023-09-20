@@ -3,7 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TKVServer", "TKVServer/TKVServer.csproj", "{56453E09-6DB9-4E41-80DD-E9636218C66B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TKVTransactionManager", "TKVTransactionManager\TKVTransactionManager.csproj", "{56453E09-6DB9-4E41-80DD-E9636218C66B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Protos", "Protos\Protos.csproj", "{6741E8B3-E10B-4704-860D-6410895A1034}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TKVClient", "TKVClient\TKVClient.csproj", "{243D1F02-C2A5-44BB-B6CF-34A2CE75103E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{56453E09-6DB9-4E41-80DD-E9636218C66B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{56453E09-6DB9-4E41-80DD-E9636218C66B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{56453E09-6DB9-4E41-80DD-E9636218C66B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6741E8B3-E10B-4704-860D-6410895A1034}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6741E8B3-E10B-4704-860D-6410895A1034}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6741E8B3-E10B-4704-860D-6410895A1034}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6741E8B3-E10B-4704-860D-6410895A1034}.Release|Any CPU.Build.0 = Release|Any CPU
+		{243D1F02-C2A5-44BB-B6CF-34A2CE75103E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{243D1F02-C2A5-44BB-B6CF-34A2CE75103E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{243D1F02-C2A5-44BB-B6CF-34A2CE75103E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{243D1F02-C2A5-44BB-B6CF-34A2CE75103E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
