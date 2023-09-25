@@ -8,3 +8,5 @@ TKVTransactionManager/.vs/*
 TKVTransactionManager/obj/*
 TKVLeaseManager/obj/*
 DADProject.sln.DotSettings
+Launcher/obj/*
+Utilities/obj/*

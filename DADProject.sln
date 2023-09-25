@@ -10,6 +10,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TKVClient", "TKVClient\TKVClient.csproj", "{243D1F02-C2A5-44BB-B6CF-34A2CE75103E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TKVLeaseManager", "TKVLeaseManager\TKVLeaseManager.csproj", "{10A8A33D-4E69-4162-B440-B414786A4D11}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Launcher", "Launcher\Launcher.csproj", "{987CBFEC-A939-4927-B035-882867E7FEAB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utilities", "Utilities\Utilities.csproj", "{1986C7A2-BC42-4FE2-A41C-9436D4632B5D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +36,14 @@ Global
 		{10A8A33D-4E69-4162-B440-B414786A4D11}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{10A8A33D-4E69-4162-B440-B414786A4D11}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{10A8A33D-4E69-4162-B440-B414786A4D11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{987CBFEC-A939-4927-B035-882867E7FEAB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{987CBFEC-A939-4927-B035-882867E7FEAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{987CBFEC-A939-4927-B035-882867E7FEAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{987CBFEC-A939-4927-B035-882867E7FEAB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1986C7A2-BC42-4FE2-A41C-9436D4632B5D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1986C7A2-BC42-4FE2-A41C-9436D4632B5D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1986C7A2-BC42-4FE2-A41C-9436D4632B5D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1986C7A2-BC42-4FE2-A41C-9436D4632B5D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
