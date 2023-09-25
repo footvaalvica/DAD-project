@@ -1,1 +1,43 @@
 syntax = "proto3";
+
+package LeaseManager_LeaseManagerServiceProto;
+
+
+service Paxos {
+	rpc Prepare(PrepareRequest) return (PromisseReply);
+	rpc Accept(AccepRequest) return (AcceptedReply);
+	rpc Decide(DecideRequest) return (DecideReply);
+}
+
+message PrepareRequest {
+	int32 slot = 1;
+	int32 leaderId = 2;
+}
+
+message PromisseReply {
+	int32 slot = 1;
+	int32 readTimestamp = 2;
+	int32 value = 3;
+}
+
+message AccepRequest {
+	int32 slot = 1;
+	int32 leaderId = 2;
+	int32 value = 3;
+}
+
+message AcceptedReply {
+	int32 slot = 1;
+	int32 writeTimestamp = 2;
+	int32 value = 3;
+}
+
+message DecideRequest {
+	int32 slot = 1;
+	int32 writeTimestamp = 2;
+	int32 value = 3;
+}
+
+message DecideReply {
+
+}

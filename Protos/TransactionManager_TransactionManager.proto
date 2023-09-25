@@ -1,1 +1,15 @@
 syntax = "proto3";
+
+import "Transaction.proto";
+
+message Gossip {
+	repeated DADInt transaction = 1;
+}
+
+message GossipResponse {
+}
+
+service GossipService {
+	rpc Gossip(Gossip) returns (GossipResponse) {}
+}
+```

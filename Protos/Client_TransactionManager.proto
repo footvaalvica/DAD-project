@@ -3,7 +3,6 @@ syntax = "proto3";
 package Client_TransactionManagerServiceProto;
 
 import "Transaction.proto";
-import "Status.proto";
 
 message TransactionRequest {
 	string id = 1;
