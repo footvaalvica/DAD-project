@@ -7,8 +7,9 @@ using TKVLeaseManager.Domain;
 
 namespace TKVLeaseManager.Services
 {
-        public class ServerService
+    public class LeaseManagerService : Paxos.PaxosBase
     {
+
         // Config file variables
         private int _processId;
         private readonly List<bool> _processFrozenPerSlot;
@@ -16,29 +17,29 @@ namespace TKVLeaseManager.Services
         private readonly List<Dictionary<int, bool>> _processesSuspectedPerSlot;
 
         // Changing variables
-        private bool isFrozen;
-        private int currentSlot;
-        private readonly ConcurrentDictionary<int, SlotData> slots;
+        private bool _isFrozen;
+        private int _currentSlot;
+        private readonly ConcurrentDictionary<int, SlotData> _slots;
 
-        public ServerService(
+        public LeaseManagerService(
             int processId,
             List<bool> processFrozenPerSlot,
             List<Dictionary<int, bool>> processesSuspectedPerSlot,
             Dictionary<int, Paxos.PaxosClient> boneyHosts
             )
         {
-            this.processId = processId;
-            this.boneyHosts = boneyHosts;
-            this.processFrozenPerSlot = processFrozenPerSlot;
-            this.processesSuspectedPerSlot = processesSuspectedPerSlot;
+            _processId = processId;
+            _processesSuspectedPerSlot = processesSuspectedPerSlot;
+            _boneyHosts = boneyHosts;
+            _processFrozenPerSlot = processFrozenPerSlot;
 
-            this.currentSlot = 0;
-            this.isFrozen = false;
+            _currentSlot = 0;
+            _isFrozen = false;
 
-            this.slots = new ConcurrentDictionary<int, SlotData>();
+            _slots = new ConcurrentDictionary<int, SlotData>();
             // Initialize slots
-            for (int i = 1; i <= processFrozenPerSlot.Count; i++)
-                this.slots.TryAdd(i, new SlotData(i));
+            for (var i = 1; i <= processFrozenPerSlot.Count; i++)
+                _slots.TryAdd(i, new SlotData(i));
         }
 
         /*
@@ -49,7 +50,7 @@ namespace TKVLeaseManager.Services
         public void PrepareSlot()
         {
             Monitor.Enter(this);
-            if (this.currentSlot >= processFrozenPerSlot.Count)
+            if (_currentSlot >= _processFrozenPerSlot.Count)
             {
                 Console.WriteLine("Slot duration ended but no more slots to process.");
                 return;
@@ -58,16 +59,16 @@ namespace TKVLeaseManager.Services
             Console.WriteLine("Preparing new slot -----------------------");
 
             // Switch process state
-            this.isFrozen = this.processFrozenPerSlot[currentSlot];
-            if (this.currentSlot > 0)
-                this.slots[this.currentSlot].IsPaxosRunning = false;
+            _isFrozen = _processFrozenPerSlot[_currentSlot];
+            if (_currentSlot > 0)
+                _slots[_currentSlot].IsPaxosRunning = false;
             Monitor.PulseAll(this);
-            Console.WriteLine($"Process is now {(this.isFrozen ? "frozen" : "normal")} for slot {currentSlot+1}");
+            Console.WriteLine($"Process is now {(_isFrozen ? "frozen" : "normal")} for slot {_currentSlot + 1}");
 
-            this.currentSlot += 1;
+            _currentSlot += 1;
 
             // Every slot increase processId to allow progress when the system configuration changes
-            this.processId += this.boneyHosts.Count;
+            _processId += _boneyHosts.Count;
 
             Console.WriteLine("Ending preparation -----------------------");
             Monitor.Exit(this);
@@ -81,13 +82,13 @@ namespace TKVLeaseManager.Services
         public PromiseReply PreparePaxos(PrepareRequest request)
         {
             Monitor.Enter(this);
-            while (this.isFrozen)
+            while (_isFrozen)
             {
                 Monitor.Wait(this);
             }
 
-            SlotData slot = this.slots[request.Slot];
-  
+            var slot = _slots[request.Slot];
+
             if (slot.ReadTimestamp < request.LeaderId)
                 slot.ReadTimestamp = request.LeaderId;
 
@@ -99,7 +100,7 @@ namespace TKVLeaseManager.Services
             };
 
             Console.WriteLine($"({request.Slot})    Received Prepare({request.LeaderId})");
-            Console.WriteLine($"({request.Slot})        Answered Promise({slot.ReadTimestamp},{slot.WrittenValue})");
+            Console.WriteLine($"({request.Slot})    Answered Promise({slot.ReadTimestamp},{slot.WrittenValue})");
 
             Monitor.Exit(this);
             return reply;
@@ -108,12 +109,12 @@ namespace TKVLeaseManager.Services
         public AcceptedReply AcceptPaxos(AcceptRequest request)
         {
             Monitor.Enter(this);
-            while (this.isFrozen)
+            while (_isFrozen)
             {
                 Monitor.Wait(this);
             }
 
-            SlotData slot = this.slots[request.Slot];
+            var slot = _slots[request.Slot];
 
             Console.WriteLine($"({request.Slot})    Recevied Accept({request.LeaderId}, {request.Value})");
 
@@ -142,22 +143,22 @@ namespace TKVLeaseManager.Services
         public DecideReply DecidePaxos(DecideRequest request)
         {
             Monitor.Enter(this);
-            while (this.isFrozen)
+            while (_isFrozen)
             {
                 Monitor.Wait(this);
             }
 
-            SlotData slot = this.slots[request.Slot];
+            var slot = _slots[request.Slot];
 
             Console.WriteLine($"({request.Slot})    Recevied Decide({request.WriteTimestamp},{request.Value})");
 
             // Learners keep track of all decided values to check for a majority
             slot.DecidedReceived.Add((request.WriteTimestamp, request.Value));
 
-            int majority = this.boneyHosts.Count / 2 + 1;
+            var majority = _boneyHosts.Count / 2 + 1;
 
             // Create a dictionary to count the number of times a request appears
-            Dictionary<(int, int), int> receivedRequests = new Dictionary<(int, int), int>();
+            var receivedRequests = new Dictionary<(int, int), int>();
             foreach (var entry in slot.DecidedReceived)
             {
                 if (receivedRequests.ContainsKey(entry))
@@ -165,9 +166,9 @@ namespace TKVLeaseManager.Services
                 else
                     receivedRequests.Add(entry, 1);
             }
-            
+
             // If a request appears more times than the majority value, it's the decided value
-            foreach (KeyValuePair<(int, int), int> requestFrequency in receivedRequests)
+            foreach (var requestFrequency in receivedRequests)
             {
                 if (requestFrequency.Value >= majority)
                 {
@@ -201,8 +202,8 @@ namespace TKVLeaseManager.Services
 
             List<PromiseReply> promiseResponses = new List<PromiseReply>();
 
-            List<Task> tasks = new List<Task>();
-            foreach (var host in this.boneyHosts)
+            var tasks = new List<Task>();
+            foreach (var host in _boneyHosts)
             {
                 Task t = Task.Run(() =>
                 {
@@ -220,7 +221,7 @@ namespace TKVLeaseManager.Services
                 tasks.Add(t);
             }
 
-            for (int i = 0; i < this.boneyHosts.Count / 2 + 1; i++)
+            for (var i = 0; i < _boneyHosts.Count / 2 + 1; i++)
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
 
             return promiseResponses;
@@ -234,13 +235,13 @@ namespace TKVLeaseManager.Services
                 LeaderId = leaderId,
                 Value = value,
             };
-            
+
             Console.WriteLine($"({slot}) Sending Accept({leaderId},{value})");
 
             List<AcceptedReply> acceptResponses = new List<AcceptedReply>();
 
-            List<Task> tasks = new List<Task>();
-            foreach (var host in this.boneyHosts)
+            var tasks = new List<Task>();
+            foreach (var host in _boneyHosts)
             {
                 Task t = Task.Run(() =>
                 {
@@ -259,7 +260,7 @@ namespace TKVLeaseManager.Services
             }
 
             // Wait for a majority of responses
-            for (int i = 0; i < this.boneyHosts.Count / 2 + 1; i++)
+            for (var i = 0; i < _boneyHosts.Count / 2 + 1; i++)
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
 
             return acceptResponses;
@@ -277,7 +278,7 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"({slot}) Sending Decide({writeTimestamp},{value})");
 
-            foreach (var host in this.boneyHosts)
+            foreach (var host in _boneyHosts)
             {
                 Task t = Task.Run(() =>
                 {
@@ -286,7 +287,7 @@ namespace TKVLeaseManager.Services
                         DecideReply decideReply = host.Value.Decide(decideRequest);
                     }
                     catch (Grpc.Core.RpcException e)
-                    {
+                    {z
                         Console.WriteLine(e.Status);
                     }
                     return Task.CompletedTask;
@@ -303,16 +304,16 @@ namespace TKVLeaseManager.Services
 
         public bool WaitForPaxos(SlotData slot, CompareAndSwapRequest request)
         {
-            bool success = true;
+            var success = true;
             while (slot.IsPaxosRunning)
             {
                 Monitor.Wait(this);
 
                 // Slot ended without reaching consensus
                 // Do paxos again with another configuration
-                if (this.currentSlot > slot.Slot && slot.DecidedValue == -1)
+                if (_currentSlot > slot.Slot && slot.DecidedValue == -1)
                 {
-                    Console.WriteLine($"Slot {slot.Slot} ended without consensus, starting a new paxos instance in slot {this.currentSlot}.");
+                    Console.WriteLine($"Slot {slot.Slot} ended without consensus, starting a new paxos instance in slot {_currentSlot}.");
                     success = false;
                     break;
                 }
@@ -323,12 +324,12 @@ namespace TKVLeaseManager.Services
         public bool DoPaxosInstance(CompareAndSwapRequest request)
         {
             //Monitor.Enter(this);
-            
-            SlotData slot = this.slots[request.Slot];
+
+            var slot = _slots[request.Slot];
 
             // If paxos isn't running and a value hasn't been decided, start paxos
             if (!slot.IsPaxosRunning && slot.DecidedValue == -1)
-            {   
+            {
                 slot.IsPaxosRunning = true;
             }
             else
@@ -336,15 +337,15 @@ namespace TKVLeaseManager.Services
                 return WaitForPaxos(slot, request);
             }
 
-            Console.WriteLine($"Starting Paxos instance in slot {this.currentSlot} for slot {request.Slot}");
+            Console.WriteLine($"Starting Paxos instance in slot {_currentSlot} for slot {request.Slot}");
 
             // Select new leader
-            Dictionary<int, bool> processesSuspected = this.processesSuspectedPerSlot[currentSlot - 1];
-            int leader = int.MaxValue;
-            foreach (KeyValuePair<int, bool> process in processesSuspected)
+            Dictionary<int, bool> processesSuspected = _processesSuspectedPerSlot[_currentSlot - 1];
+            var leader = int.MaxValue;
+            foreach (var process in processesSuspected)
             {
                 // Boney process that is not suspected and has the lowest id
-                if (!process.Value && process.Key < leader && this.boneyHosts.ContainsKey(process.Key))
+                if (!process.Value && process.Key < leader && _boneyHosts.ContainsKey(process.Key))
                     leader = process.Key;
             }
 
@@ -352,15 +353,15 @@ namespace TKVLeaseManager.Services
             {
                 // this should never happen, if process is running then he can be the leader  
             }
-            
-            Console.WriteLine($"Paxos leader is {leader} in slot {this.currentSlot} for slot {request.Slot}");
+
+            Console.WriteLine($"Paxos leader is {leader} in slot {_currentSlot} for slot {request.Slot}");
 
             // Save processId for current paxos instance
             // Otherwise it might change in the middle of paxos if a new slot begins
-            int leaderCurrentId = this.processId;
-            
+            int leaderCurrentId = _processId;
+
             // 'leader' comes from config, doesnt account for increase in processId
-            if (this.processId % this.boneyHosts.Count != leader)
+            if (_processId % _boneyHosts.Count != leader)
             {
                 return WaitForPaxos(slot, request);
             }
@@ -368,18 +369,18 @@ namespace TKVLeaseManager.Services
             Monitor.Exit(this);
             // Send prepare to all acceptors
             List<PromiseReply> promiseResponses = SendPrepareRequest(request.Slot, leaderCurrentId);
-            
+
             Monitor.Enter(this);
             // Stop being leader if there is a more recent one
             foreach (var response in promiseResponses)
             {
-                if (response.ReadTimestamp > this.processId)
+                if (response.ReadTimestamp > _processId)
                     return WaitForPaxos(slot, request);
             }
 
             // Get values from promises
-            int mostRecent = -1;
-            int valueToPropose = -1;
+            var mostRecent = -1;
+            var valueToPropose = -1;
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > mostRecent)
@@ -401,16 +402,6 @@ namespace TKVLeaseManager.Services
             // Wait for learners to decide
             return WaitForPaxos(slot, request);
         }
-    }
-    public class PaxosService : Paxos.PaxosBase
-    {
-        private readonly ServerService serverService;
-
-        public PaxosService(ServerService serverService)
-        {
-            this.serverService = serverService;
-        }
-
         public override Task<PromiseReply> Prepare(PrepareRequest request, ServerCallContext context)
         {
             return Task.FromResult(serverService.PreparePaxos(request));

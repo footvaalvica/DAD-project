@@ -17,7 +17,7 @@
     </PackageReference>
     <Protobuf Include="..\Protos\LeaseManager_LeaseManager.proto" GrpcServices="Both" Link="Protos\LeaseManager_LeaseManager.proto" />
     <Protobuf Include="..\Protos\TransactionManager_LeaseManager.proto" GrpcServices="Server" Link="Protos\TransactionManager_LeaseManager.proto" />
-    <!--<ProjectReference Include="..\Utilities\Utilities.csproj" />-->
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
   
   <ItemGroup>

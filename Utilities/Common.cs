@@ -32,7 +32,7 @@ namespace Utilities
         }
     }
 
-    public struct TKVTransactionManagerConfig
+    public struct TkvTransactionManagerConfig
     {
         public List<ProcessInfo> TransactionManagers { get; }
         public List<ProcessInfo> LeaseManagers { get; }
@@ -41,7 +41,7 @@ namespace Utilities
 
         public Dictionary<int, ProcessState>[] ProcessStates { get; }
 
-        public TKVTransactionManagerConfig(List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, (int, TimeSpan) timeSlot, Dictionary<int, ProcessState>[] processStates)
+        public TkvTransactionManagerConfig(List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, (int, TimeSpan) timeSlot, Dictionary<int, ProcessState>[] processStates)
         {
             this.TransactionManagers = transactionManagers;
             this.LeaseManagers = leaseManagers;
@@ -56,30 +56,30 @@ namespace Utilities
     {
         public static string GetSolutionDir()
         {
-            return Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).Parent?.Parent?.Parent?.Parent ?.FullName;
+            return Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).Parent?.Parent?.Parent?.Parent?.FullName;
         }
 
-        public static TKVTransactionManagerConfig ReadConfig()
+        public static TkvTransactionManagerConfig ReadConfig()
         {
-            string configPath = Path.Join(GetSolutionDir(), "Launcher", "config.txt");
+            var configPath = Path.Join(GetSolutionDir(), "Launcher", "config.txt");
             string[] lines = File.ReadAllLines(configPath);
 
-            int slotDuration = -1;
-            TimeSpan startTime =  new TimeSpan();
+            var slotDuration = -1;
+            var startTime = new TimeSpan();
             Dictionary<int, ProcessState[]> processStates = null;
-            List<ProcessInfo> transactionManagers = new List<ProcessInfo>();
-            List<ProcessInfo> leaseManagers = new List<ProcessInfo>();
+            var transactionManagers = new List<ProcessInfo>();
+            var leaseManagers = new List<ProcessInfo>();
 
-            Regex rg = new Regex(@"(\([^0-9]*\d+[^0-9]*\))");
+            var rg = new Regex(@"(\([^0-9]*\d+[^0-9]*\))");
 
-            foreach (string line in lines)
+            foreach (var line in lines)
             {
                 string[] args = line.Split(" ");
 
                 if (args[0].Equals("P") && !args[2].Equals("C"))
                 {
-                    int processId = int.Parse(args[1]);
-                    ProcessInfo processInfo = new ProcessInfo(processId, args[2], args[3]);
+                    var processId = int.Parse(args[1]);
+                    var processInfo = new ProcessInfo(processId, args[2], args[3]);
                     if (args[2].Equals("T"))
                     {
                         transactionManagers.Add(processInfo);
@@ -98,7 +98,7 @@ namespace Utilities
 
                 else if (args[0].Equals("D"))
                 {
-                    int numOfSlots = int.Parse(args[1]);
+                    var numOfSlots = int.Parse(args[1]);
                     //processStates = new Dictionary<int, ProcessState>[numOfSlots];
                     // TOD: check if this is correct
                 }
@@ -110,22 +110,22 @@ namespace Utilities
                         continue;
                     }
 
-                    MatchCollection matched = rg.Matches(line);
-                    int slotId = int.Parse(args[1]);
-                   // processStates[slotId - 1] = new Dictionary<int, ProcessState>();
+                    var matched = rg.Matches(line);
+                    var slotId = int.Parse(args[1]);
+                    // processStates[slotId - 1] = new Dictionary<int, ProcessState>();
 
-                    foreach (Match match in matched.Cast<Match>())
+                    foreach (var match in matched.Cast<Match>())
                     {
                         string[] values = match.Value.Split(",");
-                        int processId = int.Parse(values[0].Remove(0, 1));
-                        bool Crashed = values[1].Equals(" C");
-                        bool Suspected = values[2].Remove(values[2].Length - 1).Equals(" S");
+                        var processId = int.Parse(values[0].Remove(0, 1));
+                        var crashed = values[1].Equals(" C");
+                        var suspected = values[2].Remove(values[2].Length - 1).Equals(" S");
                         // processStates[slotId - 1].Add(processId, new ProcessState(Crashed, Suspected));
                     }
-                } 
+                }
             }
 
         }
     }
 
-}   
+}

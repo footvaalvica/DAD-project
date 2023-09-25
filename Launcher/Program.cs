@@ -10,7 +10,7 @@ namespace Launcher
     {
         static Process StartProcess(string path, string args)
         {
-            ProcessStartInfo pInfo = new ProcessStartInfo();
+            var pInfo = new ProcessStartInfo();
 
             pInfo.UseShellExecute = true;
             pInfo.FileName = path;
@@ -23,24 +23,24 @@ namespace Launcher
 
         static Process CreateProcess(string baseDir, string[] configArgs)
         {
-            string clientPath = Path.Combine(baseDir, "TKVClient", "bin", "Debug", "netcoreapp3.1", "Client.exe");
-            string transactionManagerPath = Path.Combine(baseDir, "TKVTransactionManager", "bin", "Debug", "netcoreapp3.1", "TransactionManager.exe");
-            string leaseManagerPath = Path.Combine(baseDir, "TKVLeaseManager", "bin", "Debug", "netcoreapp3.1", "LeaseManager.exe");
+            var clientPath = Path.Combine(baseDir, "TKVClient", "bin", "Debug", "netcoreapp3.1", "Client.exe");
+            var transactionManagerPath = Path.Combine(baseDir, "TKVTransactionManager", "bin", "Debug", "netcoreapp3.1", "TransactionManager.exe");
+            var leaseManagerPath = Path.Combine(baseDir, "TKVLeaseManager", "bin", "Debug", "netcoreapp3.1", "LeaseManager.exe");
 
-            string id = configArgs[1];
-            string type = configArgs[2];
+            var id = configArgs[1];
+            var type = configArgs[2];
 
             if (type.Equals("C"))
             {
-                string script = configArgs[3];
+                var script = configArgs[3];
                 return StartProcess(clientPath, id + " " + script);
             }
 
             else if (type.Equals("T") || type.Equals("L"))
             {
-                string url = configArgs[3].Remove(0, 7);
-                string host = url.Split(":")[0];
-                string port = url.Split(":")[1];
+                var url = configArgs[3].Remove(0, 7);
+                var host = url.Split(":")[0];
+                var port = url.Split(":")[1];
 
                 Console.WriteLine("Starting " + type + " " + id + " at " + host + ":" + port);
 
@@ -63,7 +63,7 @@ namespace Launcher
         static void Main()
         {
             string baseDir = Common.GetSolutionDir();
-            string configPath = Path.Join(baseDir, "Launcher", "config.txt");
+            var configPath = Path.Join(baseDir, "Launcher", "config.txt");
 
             if (!File.Exists(configPath))
             {
@@ -71,7 +71,7 @@ namespace Launcher
                 return;
             }
 
-            foreach (string line in File.ReadLines(configPath))
+            foreach (var line in File.ReadLines(configPath))
             {
                 string[] configArgs = line.Split(" ");
                 

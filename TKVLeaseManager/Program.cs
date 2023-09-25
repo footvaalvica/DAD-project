@@ -12,7 +12,7 @@ namespace TKVLeaseManager
 {
     internal class Program
     {
-        private static void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
+        private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
         {
             var timeToGo = time - DateTime.Now.TimeOfDay;
             if (timeToGo < TimeSpan.Zero)
@@ -25,7 +25,7 @@ namespace TKVLeaseManager
             }
 
             // A thread will be created at timeToGo and after that, every slotDuration
-            var timer = new System.Threading.Timer(x => { serverService.PrepareSlot(); }, null, timeToGo, TimeSpan.FromMilliseconds(slotDuration));
+            var timer = new System.Threading.Timer(x => { leaseManagerService.PrepareSlot(); }, null, timeToGo, TimeSpan.FromMilliseconds(slotDuration));
         }
 
         private static void Main(string[] args)
@@ -38,9 +38,9 @@ namespace TKVLeaseManager
             var port = int.Parse(args[2]);
 
             // Data from config file
-            BankConfig config = Common.ReadConfig();
+            TkvTransactionManagerConfig config = Common.ReadConfig();
 
-            // Process data from config file to send to serverService
+            // Process data from config file to send to leaseManagerService
             int numberOfProcesses = config.NumberOfProcesses;
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
             Dictionary<int, Paxos.PaxosClient> boneyHosts = config.BoneyProcesses.ToDictionary(
@@ -53,13 +53,14 @@ namespace TKVLeaseManager
             }).ToList();
             List<bool> processFrozenPerSlot = config.ProcessStates.Select(states => states[processId].Frozen).ToList();
 
+
             // A process should not suspect itself (it knows if its frozen or not)
-            for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
+            for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
                 processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            ServerService serverService = new ServerService(processId, processFrozenPerSlot, processesSuspectedPerSlot, boneyHosts);
+            var serverService = new ServerService(processId, processFrozenPerSlot, processesSuspectedPerSlot, boneyHosts);
 
-            Server server = new Server
+            var server = new Server
             {
                 Services = {
                     Paxos.BindService(new PaxosService(serverService)),
