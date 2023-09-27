@@ -1,10 +1,6 @@
-TKVServer/obj/*
-TKVServer/bin/*
 .vs/*
-TKVServer/.vs/*
 Protos/obj/*
 TKVClient/obj/*
-TKVTransactionManager/.vs/*
 TKVTransactionManager/obj/*
 TKVLeaseManager/obj/*
 DADProject.sln.DotSettings
@@ -14,3 +10,6 @@ DADProject.sln.DotSettings.user
 TKVClient/bin/*
 TKVTransactionManager/bin/*
 Utilities/bin/*
+TKVClient/bin/*
+Launcher/bin/*
+Protos/bin/*
