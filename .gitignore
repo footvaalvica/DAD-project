@@ -1,10 +1,11 @@
-TKVServer/obj/*
-TKVServer/bin/*
 .vs/*
-TKVServer/.vs/*
 Protos/obj/*
 TKVClient/obj/*
-TKVTransactionManager/.vs/*
 TKVTransactionManager/obj/*
 Launcher/obj/*
 Utilities/obj/*
+TKVClient/bin/*
+TKVTransactionManager/bin/*
+Launcher/bin/*
+Utilities/bin/*
+Protos/bin/*

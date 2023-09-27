@@ -23,9 +23,9 @@ namespace Launcher
 
         static Process CreateProcess(string baseDir, string[] configArgs)
         {
-            string clientPath = Path.Combine(baseDir, "TKVClient", "bin", "Debug", "netcoreapp3.1", "Client.exe");
-            string transactionManagerPath = Path.Combine(baseDir, "TKVTransactionManager", "bin", "Debug", "netcoreapp3.1", "TransactionManager.exe");
-            string leaseManagerPath = Path.Combine(baseDir, "TKVLeaseManager", "bin", "Debug", "netcoreapp3.1", "LeaseManager.exe");
+            string clientPath = Path.Combine(baseDir, "TKVClient", "bin", "Debug", "net6.0", "Client.exe");
+            string transactionManagerPath = Path.Combine(baseDir, "TKVTransactionManager", "bin", "Debug", "net6.0", "TransactionManager.exe");
+            string leaseManagerPath = Path.Combine(baseDir, "TKVLeaseManager", "bin", "Debug", "net6.0", "LeaseManager.exe");
 
             string id = configArgs[1];
             string type = configArgs[2];
