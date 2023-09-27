@@ -13,3 +13,4 @@ Utilities/bin/*
 TKVClient/bin/*
 Launcher/bin/*
 Protos/bin/*
+TKVTransactionManager/.vs/*
