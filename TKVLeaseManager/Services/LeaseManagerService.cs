@@ -235,12 +235,9 @@ namespace TKVLeaseManager.Services
             
             Console.WriteLine($"({instance}) Sending Accept({leaderId},{value})");
 
-            List<AcceptedReply> acceptResponses = new List<AcceptedReply>();
+            var acceptResponses = new List<AcceptedReply>();
 
-            List<Task> tasks = new List<Task>();
-            foreach (var host in _leaseManagerHosts)
-            {
-                var t = Task.Run(() =>
+            var tasks = _leaseManagerHosts.Select(host => Task.Run(() =>
                 {
                     try
                     {
@@ -251,10 +248,10 @@ namespace TKVLeaseManager.Services
                     {
                         Console.WriteLine(e.Status);
                     }
+
                     return Task.CompletedTask;
-                });
-                tasks.Add(t);
-            }
+                }))
+                .ToList();
 
             // Wait for a majority of responses
             for (var i = 0; i < _leaseManagerHosts.Count / 2 + 1; i++)
@@ -275,20 +272,19 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"({instance}) Sending Decide({writeTimestamp},{value})");
 
-            foreach (var host in _leaseManagerHosts)
+            foreach (var t in _leaseManagerHosts.Select(host => Task.Run(() =>
+                     {
+                         try
+                         {
+                             var decideReply = host.Value.Decide(decideRequest);
+                         }
+                         catch (Grpc.Core.RpcException e)
+                         {
+                             Console.WriteLine(e.Status);
+                         }
+                         return Task.CompletedTask;
+                     })))
             {
-                var t = Task.Run(() =>
-                {
-                    try
-                    {
-                        var decideReply = host.Value.Decide(decideRequest);
-                    }
-                    catch (Grpc.Core.RpcException e)
-                    {
-                        Console.WriteLine(e.Status);
-                    }
-                    return Task.CompletedTask;
-                });
             }
 
             // Don't need to wait for majority
