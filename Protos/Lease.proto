@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package Lease;
+
+message Lease {
+	string id = 1;
+	repeated string permissions = 2;
+}

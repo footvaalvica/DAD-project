@@ -93,7 +93,7 @@ namespace TKVLeaseManager.Services
             {
                 Instance = request.Instance,
                 ReadTimestamp = instance.ReadTimestamp,
-                Value = instance.WrittenValue,
+                Lease = instance.WrittenValue,
             };
 
             Console.WriteLine($"({request.Instance})    Received Prepare({request.LeaderId})");
@@ -113,15 +113,15 @@ namespace TKVLeaseManager.Services
 
             var instance = _instances[request.Instance];
 
-            Console.WriteLine($"({request.Instance})    Recevied Accept({request.LeaderId}, {request.Value})");
+            Console.WriteLine($"({request.Instance})    Recevied Accept({request.LeaderId}, {request.Lease})");
 
             if (instance.ReadTimestamp == request.LeaderId)
             {
                 instance.WriteTimestamp = request.LeaderId;
-                instance.WrittenValue = request.Value;
+                instance.WrittenValue = request.Lease;
 
                 // Acceptors send the information to Learners
-                SendDecideRequest(instance.Instance, instance.WriteTimestamp, request.Value);
+                SendDecideRequest(instance.Instance, instance.WriteTimestamp, request.Lease);
             }
 
             Console.WriteLine($"({request.Instance})        Answered Accepted({instance.WriteTimestamp},{instance.WrittenValue})");
@@ -130,7 +130,7 @@ namespace TKVLeaseManager.Services
             {
                 Instance = request.Instance,
                 WriteTimestamp = instance.WriteTimestamp,
-                Value = instance.WrittenValue,
+                Lease = instance.WrittenValue,
             };
 
             Monitor.Exit(this);
@@ -147,15 +147,15 @@ namespace TKVLeaseManager.Services
 
             var instance = _instances[request.Instance];
 
-            Console.WriteLine($"({request.Instance})    Recevied Decide({request.WriteTimestamp},{request.Value})");
+            Console.WriteLine($"({request.Instance})    Recevied Decide({request.WriteTimestamp},{request.Lease})");
 
             // Learners keep track of all decided values to check for a majority
-            instance.DecidedReceived.Add((request.WriteTimestamp, request.Value));
+            instance.DecidedReceived.Add((request.WriteTimestamp, request.Lease));
 
             var majority = _leaseManagerHosts.Count / 2 + 1;
 
             // Create a dictionary to count the number of times a request appears
-            var receivedRequests = new Dictionary<(int, int), int>();
+            var receivedRequests = new Dictionary<(int, Lease), int>();
             foreach (var entry in instance.DecidedReceived)
             {
                 if (receivedRequests.ContainsKey(entry))
@@ -167,12 +167,10 @@ namespace TKVLeaseManager.Services
             // If a request appears more times than the majority value, it's the decided value
             foreach (var requestFrequency in receivedRequests)
             {
-                if (requestFrequency.Value >= majority)
-                {
-                    instance.DecidedValue = requestFrequency.Key.Item2;
-                    instance.IsPaxosRunning = false;
-                    Monitor.PulseAll(this);
-                }
+                if (requestFrequency.Value < majority) continue;
+                instance.DecidedValue = requestFrequency.Key.Item2;
+                instance.IsPaxosRunning = false;
+                Monitor.PulseAll(this);
             }
 
             Console.WriteLine($"({request.Instance})        Answered Decided()");
@@ -224,16 +222,16 @@ namespace TKVLeaseManager.Services
             return promiseResponses;
         }
 
-        public List<AcceptedReply> SendAcceptRequest(int instance, int leaderId, int value)
+        public List<AcceptedReply> SendAcceptRequest(int instance, int leaderId, Lease lease)
         {
             var acceptRequest = new AcceptRequest
             {
                 Instance = instance,
                 LeaderId = leaderId,
-                Value = value,
+                Lease = lease
             };
             
-            Console.WriteLine($"({instance}) Sending Accept({leaderId},{value})");
+            Console.WriteLine($"({instance}) Sending Accept({leaderId},{lease})");
 
             var acceptResponses = new List<AcceptedReply>();
 
@@ -260,17 +258,17 @@ namespace TKVLeaseManager.Services
             return acceptResponses;
         }
 
-        public void SendDecideRequest(int instance, int writeTimestamp, int value)
+        public void SendDecideRequest(int instance, int writeTimestamp, Lease lease)
         {
 
             var decideRequest = new DecideRequest
             {
                 Instance = instance,
                 WriteTimestamp = writeTimestamp,
-                Value = value
+                Lease = lease
             };
 
-            Console.WriteLine($"({instance}) Sending Decide({writeTimestamp},{value})");
+            Console.WriteLine($"({instance}) Sending Decide({writeTimestamp},{lease})");
 
             foreach (var t in _leaseManagerHosts.Select(host => Task.Run(() =>
                      {
@@ -304,12 +302,10 @@ namespace TKVLeaseManager.Services
 
                 // Instance ended without reaching consensus
                 // Do paxos again with another configuration
-                if (_currentInstance > instance.Instance && instance.DecidedValue == -1)
-                {
-                    Console.WriteLine($"Instance {instance.Instance} ended without consensus, starting a new paxos instance in instance {_currentInstance}.");
-                    success = false;
-                    break;
-                }
+                if (_currentInstance <= instance.Instance || !instance.DecidedValue.Equals(new Lease() { Id = "-1", Permissions = {  }})) continue;
+                Console.WriteLine($"Instance {instance.Instance} ended without consensus, starting a new paxos instance in instance {_currentInstance}.");
+                success = false;
+                break;
             }
             return success;
         }
@@ -321,7 +317,7 @@ namespace TKVLeaseManager.Services
             var instance = _instances[request.Instance];
 
             // If paxos isn't running and a value hasn't been decided, start paxos
-            if (!instance.IsPaxosRunning && instance.DecidedValue == -1)
+            if (!instance.IsPaxosRunning && instance.DecidedValue.Equals(new Lease() { Id = "-1", Permissions = {  }}))
             {   
                 instance.IsPaxosRunning = true;
             }
@@ -341,11 +337,6 @@ namespace TKVLeaseManager.Services
                 if (!process.Value && process.Key < leader && _leaseManagerHosts.ContainsKey(process.Key))
                     leader = process.Key;
             }
-
-            if (leader == int.MaxValue)
-            {
-                // this should never happen, if process is running then he can be the leader  
-            }
             
             Console.WriteLine($"Paxos leader is {leader} in instance {_currentInstance} for instance {request.Instance}");
 
@@ -353,7 +344,7 @@ namespace TKVLeaseManager.Services
             // Otherwise it might change in the middle of paxos if a new instance begins
             var leaderCurrentId = _processId;
             
-            // 'leader' comes from config, doesnt account for increase in processId
+            // 'leader' comes from config, doesn't account for increase in processId
             if (_processId % _leaseManagerHosts.Count != leader)
             {
                 return WaitForPaxos(instance, request);
@@ -396,7 +387,7 @@ namespace TKVLeaseManager.Services
             return WaitForPaxos(instance, request);
         }
 
-        public LeaseResponse Lease(LeaseRequest request)
+        public LeaseResponse LeaseRequest(LeaseRequest request)
         {
             Monitor.Enter(this);
             while (_isFrozen)
@@ -416,7 +407,7 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"Compare and swap replied with value {instance.DecidedValue} for instance {request.Instance}");
 
-            return  new CompareAndSwapReply
+            return new LeaseResponse
             {
                 Instance = request.Instance,
                 Outvalue = instance.DecidedValue,

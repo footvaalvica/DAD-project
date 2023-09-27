@@ -58,7 +58,7 @@ namespace TKVLeaseManager
             for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
                 processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            var serverService = new ServerService(processId, processFrozenPerSlot, processesSuspectedPerSlot, boneyHosts);
+            var serverService = new LeaseManagerService(processId, processFrozenPerSlot, processesSuspectedPerSlot, boneyHosts);
 
             var server = new Server
             {

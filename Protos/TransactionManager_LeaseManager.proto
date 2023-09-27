@@ -2,13 +2,18 @@ syntax = "proto3";
 
 package TransactionManager_LeaseManagerServiceProto;
 
+import "Lease.proto";
+
 message LeaseRequest {
-	string id = 1;
-	repeated string permissions = 2;
+	int32 instance = 1;
+	Lease lease = 2;
+	// int32 number = 3;
 }
 
 message LeaseResponse {
-	bool status = 1;
+	int32 instance = 1;
+	bool status = 2;
+	// int32 number = 3;
 }
 
 service TransactionManager_LeaseManagerService {
