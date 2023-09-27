@@ -364,19 +364,19 @@ namespace TKVLeaseManager.Services
 
             // Get values from promises
             var mostRecent = -1;
-            var valueToPropose = -1;
+            var valueToPropose = new Lease() { Id = "-1", Permissions = {  }};
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > mostRecent)
                 {
                     mostRecent = response.ReadTimestamp;
-                    valueToPropose = response.Value;
+                    valueToPropose = response.Lease;
                 }
             }
 
             // If acceptors have no value, send own value
-            if (valueToPropose == -1)
-                valueToPropose = request.Invalue;
+            if (valueToPropose.Equals(new Lease() { Id = "-1", Permissions = { } }))
+                valueToPropose = new Lease() { Id = request.Id, Permissions = { request.Permissions } };
 
             Monitor.Exit(this);
             // Send accept to all acceptors which will send decide to all learners
@@ -397,7 +397,7 @@ namespace TKVLeaseManager.Services
 
             var instance = _instances[request.Instance];
         
-            Console.WriteLine($"Compare and swap request with value {request.Invalue} in instance {request.Instance}");
+            Console.WriteLine($"Compare and swap request with value {request.Id} and {request.Permissions} in instance {request.Instance}");
 
             while (!DoPaxosInstance(request))
             {   
@@ -410,7 +410,7 @@ namespace TKVLeaseManager.Services
             return new LeaseResponse
             {
                 Instance = request.Instance,
-                Outvalue = instance.DecidedValue,
+                Status = true
             };
         }
     }
