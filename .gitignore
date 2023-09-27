@@ -2,10 +2,15 @@
 Protos/obj/*
 TKVClient/obj/*
 TKVTransactionManager/obj/*
+TKVLeaseManager/obj/*
+DADProject.sln.DotSettings
 Launcher/obj/*
 Utilities/obj/*
+DADProject.sln.DotSettings.user
 TKVClient/bin/*
 TKVTransactionManager/bin/*
-Launcher/bin/*
 Utilities/bin/*
+TKVClient/bin/*
+Launcher/bin/*
 Protos/bin/*
+TKVTransactionManager/.vs/*

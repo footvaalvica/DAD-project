@@ -12,4 +12,3 @@ message GossipResponse {
 service GossipService {
 	rpc Gossip(Gossip) returns (GossipResponse) {}
 }
-```
