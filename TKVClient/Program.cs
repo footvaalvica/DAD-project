@@ -4,7 +4,7 @@ namespace TKVClient
 {
     internal class Program
     {
-        static void wait(string[] command)
+        static void Wait(string[] command)
         {
             try
             {
@@ -21,7 +21,7 @@ namespace TKVClient
             }
         }
 
-        static void transactionRequest(string[] command)
+        static void TransactionRequest(string[] command)
         {
             if (command.Length == 3)
             {
@@ -53,7 +53,7 @@ namespace TKVClient
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
         }
 
-        static bool handleCommand(string command)
+        static bool HandleCommand(string command)
         {
             string[] commandArgs = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
@@ -66,11 +66,11 @@ namespace TKVClient
             {
                 case "w":
                     Console.WriteLine("Client set to wait...");
-                    wait(commandArgs);
+                    Wait(commandArgs);
                     break;
                 case "t":
                     Console.WriteLine("Processing transaction request...");
-                    transactionRequest(commandArgs);
+                    TransactionRequest(commandArgs);
                     break;
                 case "x":
                     Console.WriteLine("Sending status request...");
@@ -102,7 +102,7 @@ namespace TKVClient
 
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
 
-            TKVConfig config;
+            TkvConfig config;
             try { config = Common.ReadConfig(); }
             catch (Exception e)
             {
@@ -133,7 +133,7 @@ namespace TKVClient
 
             int clientTimestamp = 0;
 
-            foreach (string command in commands) { handleCommand(command); }
+            foreach (string command in commands) { HandleCommand(command); }
         }
     }
 }

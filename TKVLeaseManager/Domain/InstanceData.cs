@@ -2,14 +2,14 @@
 
 namespace TKVLeaseManager.Domain
 {
-    public class SlotData
+    public class InstanceData
     {
         // Learners keep a list of decided values to know when a majority was
         // achieved and reply to the client with the final value
 
-        public SlotData(int slot)
+        public InstanceData(int instance)
         {
-            this.Slot = slot;
+            this.Instance = instance;
             this.IsPaxosRunning = false;
             
             this.DecidedValue = -1;
@@ -20,7 +20,7 @@ namespace TKVLeaseManager.Domain
             this.DecidedReceived = new List<(int, int)>();
         }
 
-        public int Slot { get; set; }
+        public int Instance { get; set; }
         
         public bool IsPaxosRunning { get; set; }
 

@@ -19,9 +19,5 @@
     <Protobuf Include="..\Protos\TransactionManager_LeaseManager.proto" GrpcServices="Server" Link="Protos\TransactionManager_LeaseManager.proto" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
-  
-  <ItemGroup>
-    <Folder Include="Domain\" />
-  </ItemGroup>
 
 </Project>

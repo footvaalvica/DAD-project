@@ -10,3 +10,9 @@ TKVLeaseManager/obj/*
 DADProject.sln.DotSettings
 Launcher/obj/*
 Utilities/obj/*
+DADProject.sln.DotSettings.user
+TKVClient/bin/*
+TKVTransactionManager/bin/*
+TKVTransactionManager/bin/*
+Utilities/bin/*
+Utilities/bin/*
