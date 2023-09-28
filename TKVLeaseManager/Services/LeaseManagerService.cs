@@ -11,7 +11,7 @@ namespace TKVLeaseManager.Services
         private int _processId;
         private readonly List<bool> _processFrozenPerInstance;
         private readonly Dictionary<string, Paxos.PaxosClient> _leaseManagerHosts;
-        private readonly List<Dictionary<int, bool>> _processesSuspectedPerInstance;
+        private readonly List<Dictionary<string, List<String>>> _processesSuspectedPerInstance;
 
         // Changing variables
         private bool _isFrozen;
@@ -21,7 +21,7 @@ namespace TKVLeaseManager.Services
         public LeaseManagerService(
             int processId,
             List<bool> processFrozenPerInstance,
-            List<Dictionary<int, bool>> processesSuspectedPerInstance,
+            List<Dictionary<string, List<String>>> processesSuspectedPerInstance,
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts
             )
         {

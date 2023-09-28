@@ -48,9 +48,9 @@ namespace TKVLeaseManager
                 // !! not sure if this cast is alright? should be tho
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Id))
             );
-            List<Dictionary<int, bool>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
+            List<Dictionary<string, List<String>>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
             {
-                return states.ToDictionary(key => key.Key, value => value.Value.Suspected);
+                return states.ToDictionary(key => key.Key, value => value.Value.Suspects);
             }).ToList();
             List<bool> processFrozenPerSlot = config.ProcessStates.Select(states => states[processId].Frozen).ToList();
 
