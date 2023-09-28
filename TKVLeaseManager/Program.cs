@@ -22,7 +22,7 @@ namespace TKVLeaseManager
             }
 
             // A thread will be created at timeToGo and after that, every slotDuration
-            timer = new(x =>
+            timer = new Timer(x =>
             {
                 leaseManagerService.PrepareInstance();
             }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
