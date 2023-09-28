@@ -23,9 +23,9 @@ namespace Launcher
 
         static Process CreateProcess(string baseDir, string[] configArgs)
         {
-            var clientPath = Path.Combine(baseDir, "TKVClient", "bin", "Debug", "net6.0", "Client.exe");
-            var transactionManagerPath = Path.Combine(baseDir, "TKVTransactionManager", "bin", "Debug", "net6.0", "TransactionManager.exe");
-            var leaseManagerPath = Path.Combine(baseDir, "TKVLeaseManager", "bin", "Debug", "net6.0", "LeaseManager.exe");
+            var clientPath = Path.Combine(baseDir, "TKVClient", "bin", "Debug", "net6.0", "TKVClient.exe");
+            var transactionManagerPath = Path.Combine(baseDir, "TKVTransactionManager", "bin", "Debug", "net6.0", "TKVTransactionManager.exe");
+            var leaseManagerPath = Path.Combine(baseDir, "TKVLeaseManager", "bin", "Debug", "net6.0", "TKVLeaseManager.exe");
 
             var id = configArgs[1];
             var type = configArgs[2];
