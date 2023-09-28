@@ -1,23 +1,20 @@
 ﻿using Grpc.Core;
 using Grpc.Net.Client;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using LeaseManagerLeaseManagerServiceProto;
 using TKVLeaseManager.Services;
+using TransactionManagerLeaseManagerServiceProto;
 using Utilities;
-
-// TODO!
 
 namespace TKVLeaseManager
 {
     internal class Program
     {
+        static System.Threading.Timer timer;
         private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
         {
-            var timeToGo = time - DateTime.Now.TimeOfDay;
+            TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
             if (timeToGo < TimeSpan.Zero)
             {
-                ////find better messages
                 Console.WriteLine("Slot starting before finished server setup.");
                 Console.WriteLine("Aborting...");
                 Environment.Exit(0);
@@ -25,27 +22,31 @@ namespace TKVLeaseManager
             }
 
             // A thread will be created at timeToGo and after that, every slotDuration
-            var timer = new System.Threading.Timer(x => { leaseManagerService.PrepareSlot(); }, null, timeToGo, TimeSpan.FromMilliseconds(slotDuration));
+            timer = new(x =>
+            {
+                leaseManagerService.PrepareInstance();
+            }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
         }
 
-        private static void Main(string[] args)
+        static void Main(string[] args)
         {
             AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
             // Command Line Arguments
-            var processId = int.Parse(args[0]);
-            var host = args[1];
-            var port = int.Parse(args[2]);
+            int processId = int.Parse(args[0]);
+            string host = args[1];
+            int port = int.Parse(args[2]);
 
             // Data from config file
-            TkvTransactionManagerConfig config = Common.ReadConfig();
+            leaseManagerBankConfig config = Common.ReadConfig();
 
-            // Process data from config file to send to leaseManagerService
+            // Process data from config file to send to serverService
             int numberOfProcesses = config.NumberOfProcesses;
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
-            Dictionary<int, Paxos.PaxosClient> boneyHosts = config.BoneyProcesses.ToDictionary(
+            Dictionary<int, Paxos.PaxosClient> leaseManagerHosts = config.leaseManagerProcesses.ToDictionary(
                 key => key.Id,
-                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Address))
+                // !! not sure if this cast is alright? should be tho
+                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Address as string))
             );
             List<Dictionary<int, bool>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
             {
@@ -53,29 +54,29 @@ namespace TKVLeaseManager
             }).ToList();
             List<bool> processFrozenPerSlot = config.ProcessStates.Select(states => states[processId].Frozen).ToList();
 
-
             // A process should not suspect itself (it knows if its frozen or not)
-            for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
+            for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
                 processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            var serverService = new LeaseManagerService(processId, processFrozenPerSlot, processesSuspectedPerSlot, boneyHosts);
+            LeaseManagerService leaseManagerService = new(processId, processFrozenPerSlot, processesSuspectedPerSlot, leaseManagerHosts);
 
-            var server = new Server
+            Server server = new()
             {
                 Services = {
-                    Paxos.BindService(new PaxosService(serverService)),
+                    Paxos.BindService(new PaxosService(leaseManagerService)),
+                    TransactionManager_LeaseManagerService.BindService(new RequestLeaseService(leaseManagerService))
                 },
                 Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
             };
 
             server.Start();
 
-            Console.WriteLine($"TKVLeaseManager ({processId}) listening on port {port}");
+            Console.WriteLine($"leaseManager ({processId}) listening on port {port}");
             Console.WriteLine($"First slot starts at {startTime} with intervals of {slotDuration} ms");
-            Console.WriteLine($"Working with {tkvLeaseManager.Count} TKVLeaseManager processes");
+            Console.WriteLine($"Working with {leaseManagerHosts.Count} leaseManager processes");
 
             // Starts thread in timeSpan
-            SetSlotTimer(startTime, slotDuration, serverService);
+            SetSlotTimer(startTime, slotDuration, leaseManagerService);
 
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();

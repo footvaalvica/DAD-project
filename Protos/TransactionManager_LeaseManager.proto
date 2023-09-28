@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package TransactionManager_LeaseManagerServiceProto;
 
-import "Lease.proto";
+import "LeaseType.proto";
 
 message LeaseRequest {
 	int32 instance = 1;

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
-using LeaseManagerLeaseManagerServiceProto;
 using TKVLeaseManager.Domain;
 using TransactionManagerLeaseManagerServiceProto;
+using LeaseManagerLeaseManagerServiceProto;
 
 namespace TKVLeaseManager.Services
 {
@@ -33,10 +33,10 @@ namespace TKVLeaseManager.Services
             _currentInstance = 0;
             _isFrozen = false;
 
-            _instances = new ConcurrentDictionary<int, InstanceData>();
+            _instances = new();
             // Initialize instances
             for (var i = 1; i <= processFrozenPerInstance.Count; i++)
-                _instances.TryAdd(i, new InstanceData(i));
+                _instances.TryAdd(i, new(i));
         }
 
         /*
@@ -175,7 +175,7 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"({request.Instance})        Answered Decided()");
             Monitor.Exit(this);
-            return new DecideReply
+            return new()
             {
             };
         }
@@ -195,9 +195,9 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"({instance}) Sending Prepare({leaderId})");
 
-            List<PromiseReply> promiseResponses = new List<PromiseReply>();
+            List<PromiseReply> promiseResponses = new();
 
-            List<Task> tasks = new List<Task>();
+            List<Task> tasks = new();
             foreach (var host in _leaseManagerHosts)
             {
                 var t = Task.Run(() =>
@@ -302,7 +302,7 @@ namespace TKVLeaseManager.Services
 
                 // Instance ended without reaching consensus
                 // Do paxos again with another configuration
-                if (_currentInstance <= instance.Instance || !instance.DecidedValue.Equals(new Lease() { Id = "-1", Permissions = {  }})) continue;
+                if (_currentInstance <= instance.Instance || !instance.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }})) continue;
                 Console.WriteLine($"Instance {instance.Instance} ended without consensus, starting a new paxos instance in instance {_currentInstance}.");
                 success = false;
                 break;
@@ -317,7 +317,7 @@ namespace TKVLeaseManager.Services
             var instance = _instances[request.Instance];
 
             // If paxos isn't running and a value hasn't been decided, start paxos
-            if (!instance.IsPaxosRunning && instance.DecidedValue.Equals(new Lease() { Id = "-1", Permissions = {  }}))
+            if (!instance.IsPaxosRunning && instance.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }}))
             {   
                 instance.IsPaxosRunning = true;
             }
@@ -375,8 +375,8 @@ namespace TKVLeaseManager.Services
             }
 
             // If acceptors have no value, send own value
-            if (valueToPropose.Equals(new Lease() { Id = "-1", Permissions = { } }))
-                valueToPropose = new Lease() { Id = request.Id, Permissions = { request.Permissions } };
+            if (valueToPropose.Equals(new() { Id = "-1", Permissions = { } }))
+                valueToPropose = request.Lease;
 
             Monitor.Exit(this);
             // Send accept to all acceptors which will send decide to all learners
@@ -397,7 +397,7 @@ namespace TKVLeaseManager.Services
 
             var instance = _instances[request.Instance];
         
-            Console.WriteLine($"Compare and swap request with value {request.Id} and {request.Permissions} in instance {request.Instance}");
+            Console.WriteLine($"Compare and swap request with value {request.Lease} in instance {request.Instance}");
 
             while (!DoPaxosInstance(request))
             {   
@@ -407,7 +407,7 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"Compare and swap replied with value {instance.DecidedValue} for instance {request.Instance}");
 
-            return new LeaseResponse
+            return new()
             {
                 Instance = request.Instance,
                 Status = true

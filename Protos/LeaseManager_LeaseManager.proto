@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package LeaseManager_LeaseManagerServiceProto;
 
-import "Lease.proto";
+import "LeaseType.proto";
 
 service Paxos {
 	rpc Prepare(PrepareRequest) returns (PromiseReply);
@@ -39,4 +39,5 @@ message DecideRequest {
 	Lease lease = 3;
 }
 
-message DecideReply {}
+message DecideReply {
+}
