@@ -47,7 +47,7 @@ namespace TKVTransactionManager
 
             // Process data from config file to send to serverService
             int numberOfProcesses = config.NumberOfProcesses;
-            (int slotDuration, TimeSpan startTime) = config.TimeSlot;
+            (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
             // TKVTransactionM <-> TKVTransactionM
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers = config.TransactionManagers.ToDictionary(

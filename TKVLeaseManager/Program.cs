@@ -38,7 +38,7 @@ namespace TKVLeaseManager
             int port = int.Parse(args[2]);
 
             // Data from config file
-            leaseManagerBankConfig config = Common.ReadConfig();
+            TKVConfig config = Common.ReadConfig();
 
             // Process data from config file to send to serverService
             int numberOfProcesses = config.NumberOfProcesses;

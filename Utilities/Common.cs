@@ -37,12 +37,12 @@ namespace Utilities
         }
     }
 
-    public struct TkvConfig
+    public struct TKVConfig
     {
         public List<ProcessInfo> TransactionManagers { get; }
         public List<ProcessInfo> LeaseManagers { get; }
         public int NumberOfProcesses { get; }
-        public (int, TimeSpan) TimeSlot { get; }
+        public (int, TimeSpan) SlotDetails { get; }
 
         public Dictionary<string, ProcessState>[] ProcessStates { get; }
 
@@ -51,7 +51,7 @@ namespace Utilities
             this.TransactionManagers = transactionManagers;
             this.LeaseManagers = leaseManagers;
             this.NumberOfProcesses = numberOfProcesses;
-            this.TimeSlot = (slotDuration, startTime);
+            this.SlotDetails = (slotDuration, startTime);
             this.ProcessStates = processStates;
         }
 
@@ -65,7 +65,7 @@ namespace Utilities
             return Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).Parent?.Parent?.Parent?.Parent?.FullName;
         }
 
-        public static TkvConfig ReadConfig()
+        public static TKVConfig ReadConfig()
         {
             string configPath = Path.Join(GetSolutionDir(), "Launcher", "config.txt");
             string[] commands;

@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+package TransactionManager_TransactionManagerProto;
 // TODO : remove/change/add stuff
 
 enum Type {

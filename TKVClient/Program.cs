@@ -102,7 +102,7 @@ namespace TKVClient
 
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
 
-            TkvConfig config;
+            TKVConfig config;
             try { config = Common.ReadConfig(); }
             catch (Exception)
             {
@@ -110,7 +110,7 @@ namespace TKVClient
                 return;
             }
             // TODO: process config file
-            (int slotDuration, TimeSpan startTime) = config.TimeSlot;
+            (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
             // Read client scripts
             string baseDirectory = Common.GetSolutionDir();
