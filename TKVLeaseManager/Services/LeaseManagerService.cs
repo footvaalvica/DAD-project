@@ -10,7 +10,7 @@ namespace TKVLeaseManager.Services
         // Config file variables
         private int _processId;
         private readonly List<bool> _processFrozenPerInstance;
-        private readonly Dictionary<int, Paxos.PaxosClient> _leaseManagerHosts;
+        private readonly Dictionary<string, Paxos.PaxosClient> _leaseManagerHosts;
         private readonly List<Dictionary<int, bool>> _processesSuspectedPerInstance;
 
         // Changing variables
@@ -22,7 +22,7 @@ namespace TKVLeaseManager.Services
             int processId,
             List<bool> processFrozenPerInstance,
             List<Dictionary<int, bool>> processesSuspectedPerInstance,
-            Dictionary<int, Paxos.PaxosClient> leaseManagerHosts
+            Dictionary<string, Paxos.PaxosClient> leaseManagerHosts
             )
         {
             _processId = processId;
@@ -334,7 +334,7 @@ namespace TKVLeaseManager.Services
             foreach (var process in processesSuspected)
             {
                 // leaseManager process that is not suspected and has the lowest id
-                if (!process.Value && process.Key < leader && _leaseManagerHosts.ContainsKey(process.Key))
+                if (!process.Value && process.Key < leader && _leaseManagerHosts.ContainsKey(process.Key.ToString()))
                     leader = process.Key;
             }
             

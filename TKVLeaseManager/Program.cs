@@ -43,10 +43,10 @@ namespace TKVLeaseManager
             // Process data from config file to send to serverService
             int numberOfProcesses = config.NumberOfProcesses;
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
-            Dictionary<int, Paxos.PaxosClient> leaseManagerHosts = config.leaseManagerProcesses.ToDictionary(
+            Dictionary<string, Paxos.PaxosClient> leaseManagerHosts = config.LeaseManagers.ToDictionary(
                 key => key.Id,
                 // !! not sure if this cast is alright? should be tho
-                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Address as string))
+                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Id))
             );
             List<Dictionary<int, bool>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
             {
