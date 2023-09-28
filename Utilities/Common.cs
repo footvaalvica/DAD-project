@@ -24,28 +24,30 @@ namespace Utilities
     public struct ProcessState
     {
         public bool Crashed { get; }
-        public bool Suspected { get; }
-
-        public ProcessState(bool crashed, bool suspected)
+        public List<string> Suspects { get; } // TODO: idk if this should be diff
+        public ProcessState(bool crashed)
         {
             this.Crashed = crashed;
-            this.Suspected = suspected;
+            this.Suspects = new();
+        }
+        public ProcessState(bool crashed, List<string> suspects)
+        {
+            this.Crashed = crashed;
+            this.Suspects = suspects;
         }
     }
 
     public struct TkvConfig
     {
-        public List<ProcessInfo> Clients { get; }
         public List<ProcessInfo> TransactionManagers { get; }
         public List<ProcessInfo> LeaseManagers { get; }
         public int NumberOfProcesses { get; }
         public (int, TimeSpan) TimeSlot { get; }
 
-        public Dictionary<int, ProcessState>[] ProcessStates { get; }
+        public Dictionary<string, ProcessState>[] ProcessStates { get; }
 
-        public TkvConfig(List<ProcessInfo> clients, List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<int, ProcessState>[] processStates)
+        public TKVConfig(List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<string, ProcessState>[] processStates)
         {
-            this.Clients = clients;
             this.TransactionManagers = transactionManagers;
             this.LeaseManagers = leaseManagers;
             this.NumberOfProcesses = numberOfProcesses;
@@ -77,12 +79,11 @@ namespace Utilities
 
             int slotDuration = -1;
             TimeSpan startTime = new TimeSpan();
-            Dictionary<int, ProcessState>[] processStates = null; // TODO: ??? array of dicts??
-            List<ProcessInfo> clients = new List<ProcessInfo>();
+            Dictionary<string, ProcessState>[] processStates = null; // TODO: ??? array of dicts??
             List<ProcessInfo> transactionManagers = new List<ProcessInfo>();
             List<ProcessInfo> leaseManagers = new List<ProcessInfo>();
-
-            var rg = new Regex(@"(\([^0-9]*\d+[^0-9]*\))");
+            List<ProcessInfo> servers = new();
+            int numberOfSlots = 0;
 
             foreach (string command in commands)
             {
@@ -94,14 +95,13 @@ namespace Utilities
                     ProcessInfo processInfo = new ProcessInfo(processId, args[2], args[3]);
                     switch (args[2])
                     {
-                        case "C":
-                            clients.Add(processInfo);
-                            break;
                         case "T":
                             transactionManagers.Add(processInfo);
+                            servers.Add(processInfo);
                             break;
                         case "L":
                             leaseManagers.Add(processInfo);
+                            servers.Add(processInfo);
                             break;
                         default:
                             Console.WriteLine("Invalid process type.");
@@ -122,33 +122,49 @@ namespace Utilities
 
                 else if (args[0].Equals("S"))
                 {
-                    int numberOfSlots = int.Parse(args[1]);
-                    processStates = new Dictionary<int, ProcessState>[numberOfSlots];
+                    numberOfSlots = int.Parse(args[1]);
+                    processStates = new Dictionary<string, ProcessState>[numberOfSlots];
                 }
 
                 else if (args[0].Equals("F"))
                 {
                     if (processStates == null)
                     {
+                        // Haven't read the number of slots yet
                         continue;
                     }
 
-                    // TODO: check if this is aight
-                    MatchCollection matched = rg.Matches(command);
-                    int slotId = int.Parse(args[1]);
-                    processStates[slotId - 1] = new Dictionary<int, ProcessState>();
+                    if (args.Length < 2 + servers.Count) { throw new Exception("Invalid config file."); }
 
-                    foreach (var match in matched.Cast<Match>())
+                    int slotId = int.Parse(args[1]);
+                    processStates[slotId - 1] = new Dictionary<string, ProcessState>();
+
+                    for (int i=2; i< 2+servers.Count; i++)
+                    {
+                        switch (args[i])
+                        {
+                            case "N":
+                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(false));
+                                break;
+                            case "C":
+                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(true));
+                                break;
+                            default:
+                                throw new Exception("Invalid config file.");
+                        }
+                    }
+
+                    Regex rg = new Regex(@"\(([^,]+,[^,]+)\)");
+                    MatchCollection matched = rg.Matches(command);
+                    foreach (Match match in matched.Cast<Match>())
                     {
                         string[] values = match.Value.Split(",");
-                        var processId = int.Parse(values[0].Remove(0, 1));
-                        var crashed = values[1].Equals(" C");
-                        var suspected = values[2].Remove(values[2].Length - 1).Equals(" S");
-                        // processStates[slotId - 1].Add(processId, new ProcessState(Crashed, Suspected));
+                        processStates[slotId - 1].TryGetValue(values[0], out ProcessState state);
+                        state.Suspects.Add(values[1]);
                     }
                 }
             }
-            return new TkvConfig(clients, transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
+            return new TKVConfig(transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
         }
     }
 

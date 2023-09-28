@@ -1,16 +1,45 @@
 syntax = "proto3";
 
-import "Transaction.proto";
+// TODO : remove/change/add stuff
 
-package TransactionManager_TransactionManagerProto;
-
-message Gossip {
-	repeated DADInt transaction = 1;
+enum Type {
+	DEPOSIT = 0;
+	WITHDRAW = 1;
 }
 
-message GossipResponse {
+message Command {
+	int32 slot = 1;
+	int32 clientId = 2;
+	int32 clientSequenceNumber = 3;
+	int32 sequenceNumber = 4;
+	Type type = 5;
+	string value = 6;
 }
 
-service GossipService {
-	rpc Gossip(Gossip) returns (GossipResponse) {}
+message TentativeRequest {
+	int32 processId = 1;
+	Command command = 2;
+}
+message TentativeReply {
+	bool acknowledge = 1;
+}
+
+message CommitRequest {
+	int32 processId = 1;
+	Command command = 2;
+}
+message CommitReply {
+}
+
+message ListPendingRequestsRequest {
+	int32 lastKnownSequenceNumber = 1;
+}
+message ListPendingRequestsReply {
+	repeated Command commands = 1;
+}
+
+service TwoPhaseCommit {
+	rpc Tentative(TentativeRequest)						returns (TentativeReply);
+	rpc Commit(CommitRequest)							returns (CommitReply);
+	rpc ListPendingRequests(ListPendingRequestsRequest) returns (ListPendingRequestsReply);
 }

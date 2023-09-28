@@ -15,7 +15,7 @@ namespace TKVClient
                 }
                 else { Console.WriteLine("No time amount provided for wait."); }
             }
-            catch (FormatException e)
+            catch (FormatException)
             {
                 Console.WriteLine("Invalid time amount provided for wait.");
             }
@@ -44,7 +44,7 @@ namespace TKVClient
                         }
                         int.Parse(writePair[1]);
                         Console.WriteLine("DADINT: [" + writePair[0] + ", " + writePair[1] + "]");
-                    } catch (FormatException e)
+                    } catch (FormatException)
                     {
                         Console.WriteLine("Invalid write pair provided for transaction request.");
                     }
@@ -104,7 +104,7 @@ namespace TKVClient
 
             TkvConfig config;
             try { config = Common.ReadConfig(); }
-            catch (Exception e)
+            catch (Exception)
             {
                 Console.WriteLine("Error reading config file.");
                 return;
@@ -119,7 +119,7 @@ namespace TKVClient
 
             string[] commands;
             try { commands = File.ReadAllLines(scriptFilePath); }
-            catch (FileNotFoundException e)
+            catch (FileNotFoundException)
             {
                 Console.WriteLine("Script file not found.");
                 return;

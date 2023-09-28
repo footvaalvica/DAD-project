@@ -19,3 +19,5 @@ message LeaseResponse {
 service TransactionManager_LeaseManagerService {
 	rpc Lease(LeaseRequest) returns (LeaseResponse);
 }
+
+// TODO
