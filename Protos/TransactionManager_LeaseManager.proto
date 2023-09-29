@@ -2,7 +2,10 @@ syntax = "proto3";
 
 package TransactionManager_LeaseManagerServiceProto;
 
-import "LeaseType.proto";
+message Lease {
+	string id = 1;
+	repeated string permissions = 2;
+}
 
 message LeaseRequest {
 	int32 instance = 1;
@@ -20,4 +23,17 @@ service TransactionManager_LeaseManagerService {
 	rpc Lease(LeaseRequest) returns (LeaseResponse);
 }
 
-// TODO
+// TODO: check whats relevant/needed
+
+message CompareAndSwapRequest {
+	int32 slot = 1;
+	int32 invalue = 2;
+}
+message CompareAndSwapReply {
+	int32 slot = 1;
+	int32 outvalue = 2;
+}
+
+service CompareAndSwap {
+  rpc CompareAndSwap(CompareAndSwapRequest) returns (CompareAndSwapReply);
+}

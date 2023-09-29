@@ -1,7 +1,10 @@
 ﻿using TKVTransactionManager.Services;
 using Utilities;
-using TransactionManagerTransactionManagerProto;
 using Grpc.Net.Client;
+using Grpc.Core;
+using ClientTransactionManagerProto;
+using TransactionManagerTransactionManagerProto;
+using TransactionManagerLeaseManagerServiceProto;
 
 namespace TKVTransactionManager
 {
@@ -49,13 +52,16 @@ namespace TKVTransactionManager
             int numberOfProcesses = config.NumberOfProcesses;
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
-            // TKVTransactionM <-> TKVTransactionM
+            // TransactionM <-> TransactionM
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers = config.TransactionManagers.ToDictionary(
                 key => key.Id,
                 value => new TwoPhaseCommit.TwoPhaseCommitClient(GrpcChannel.ForAddress(value.Url))
             );
-            // TKVTransactionM <-> TKVLeaseM
-            // TODO
+            // TransactionM <-> LeaseM
+            Dictionary<string, CompareAndSwap.CompareAndSwapClient> leaseManagers = config.LeaseManagers.ToDictionary(
+                key => key.Id,
+                value => new CompareAndSwap.CompareAndSwapClient(GrpcChannel.ForAddress(value.Url))
+            );
 
             // TODO
             //List<Dictionary<string, bool>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
@@ -70,30 +76,30 @@ namespace TKVTransactionManager
             //for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
             //    processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            //TMService tmService = new(processId, processCrashedPerSlot, processesSuspectedPerSlot, transactionManagers, leaseManagers);
+            ServerService serverService = new(processId, transactionManagers, leaseManagers); // processCrashedPerSlot, processesSuspectedPerSlot, 
 
-            //Server server = new Server
-            //{
-            //    Services = {
-            //        Bank.BindService(new BankService(serverService)),
-            //        TwoPhaseCommit.BindService(new TwoPhaseCommitService(serverService)),
-            //    },
-            //    Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
-            //};
+            Server server = new Server
+            {
+                Services = {
+                    Client_TransactionManagerService.BindService(new TMService(serverService)),
+                    TwoPhaseCommit.BindService(new TwoPhaseCommitService(serverService)),
+                },
+                Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
+            };
 
-            //server.Start();
+            server.Start();
 
             Console.WriteLine($"Transaction Manager with id ({processId}) listening on port {port}");
             Console.WriteLine($"First slot starts at {startTime} with intervals of {slotDuration} ms");
             Console.WriteLine($"Working with {transactionManagers.Count} TMs"); //  and {leaseManagers.Count} boney processes
 
             // Starts a new thread for each slot
-            //SetSlotTimer(startTime, slotDuration, tmService);
+            //SetSlotTimer(startTime, slotDuration, serverService);
 
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();
 
-            //server.ShutdownAsync().Wait();
+            server.ShutdownAsync().Wait();
         }
     }
 }
