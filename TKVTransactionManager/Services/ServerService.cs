@@ -53,5 +53,10 @@ namespace TKVTransactionManager.Services
             //this.committedCommands = new Dictionary<(int, int), ClientCommand>();
         }
         // TODO : etc...
+
+        public void PrepareSlot()
+        {
+            // TODO
+        }
     }
 }

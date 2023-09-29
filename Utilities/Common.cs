@@ -25,11 +25,7 @@ namespace Utilities
     {
         public bool Crashed { get; }
         public List<string> Suspects { get; } // TODO: idk if this should be diff
-        public ProcessState(bool crashed)
-        {
-            this.Crashed = crashed;
-            this.Suspects = new();
-        }
+
         public ProcessState(bool crashed, List<string> suspects)
         {
             this.Crashed = crashed;
@@ -139,15 +135,15 @@ namespace Utilities
                     int slotId = int.Parse(args[1]);
                     processStates[slotId - 1] = new Dictionary<string, ProcessState>();
 
-                    for (int i=2; i< 2+servers.Count; i++)
+                    for (int i=0; i< servers.Count; i++)
                     {
-                        switch (args[i])
+                        switch (args[i+2])
                         {
                             case "N":
-                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(false));
+                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(false, new List<string>()));
                                 break;
                             case "C":
-                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(true));
+                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(true, new List<string>()));
                                 break;
                             default:
                                 throw new Exception("Invalid config file.");
@@ -159,8 +155,8 @@ namespace Utilities
                     foreach (Match match in matched.Cast<Match>())
                     {
                         string[] values = match.Value.Split(",");
-                        processStates[slotId - 1].TryGetValue(values[0], out ProcessState state);
-                        state.Suspects.Add(values[1]);
+                        processStates[slotId - 1].TryGetValue(values[0].Substring(1, values[0].Length-1), out ProcessState state);
+                        state.Suspects.Add(values[1].Substring(0, values[1].Length-1)); // regex not doing what i wanted so ...
                     }
                 }
             }
