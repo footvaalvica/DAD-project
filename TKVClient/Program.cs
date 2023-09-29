@@ -51,6 +51,7 @@ namespace TKVClient
 
                 tasks.Add(t);
             }
+            Task.WaitAll(tasks.ToArray());  
         }
 
         static void TransactionRequest(string[] command)
@@ -176,6 +177,7 @@ namespace TKVClient
 
             foreach (string command in commands) { HandleCommand(command, transactionManagers); }
 
+            Console.WriteLine("Press q to exit.");
             while (Console.ReadKey().Key != ConsoleKey.Q) { };
         }
     }
