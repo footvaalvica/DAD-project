@@ -6,6 +6,11 @@ using System.Diagnostics;
 namespace TKVClient
 {
     using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
+    struct DADINT
+    {
+        public string key { get; set; }
+        public int value { get; set; }
+    }
     internal class Program
     {
         static TransactionManagers? transactionManagers = null;
@@ -56,6 +61,40 @@ namespace TKVClient
             return true;
         }
 
+        static List<DADINT> TxSubmit(string id, List<String> reads, List<DADINT> writes)
+        {
+            TransactionRequest request = new TransactionRequest();
+            request.Id = id;
+            request.Reads.AddRange(reads);
+
+            // convert DADINT to DADInt of Proto file and add them to the request
+            foreach (DADINT dadint in writes)
+            {
+                request.Writes.Add(new DADInt { Key = dadint.key, Value = dadint.value });
+            }
+
+            // send request to transaction manager
+            try
+            {
+                TransactionResponse response = transactionManagers[id].TxSubmit(request); // FIXME
+                if (response.Response != null)
+                {
+                    Console.WriteLine("Transaction successful!");
+                    return response.Response.Select(read => new DADINT { key = read.Key, value = read.Value }).ToList();
+                }
+                else
+                {
+                    Console.WriteLine("Transaction failed!");
+                }
+            }
+            catch (Grpc.Core.RpcException e)
+            {
+                Console.WriteLine(e.Status);
+            }   
+
+            return new List<DADINT>();
+        }
+
         static void TransactionRequest(string[] command)
         {
             if (command.Length == 3)
@@ -67,6 +106,7 @@ namespace TKVClient
                 {
                     Console.WriteLine("DADINT: [" + read + "]");
                 }
+                List<DADINT> writesList = new List<DADINT>();
                 foreach (string write in writes)
                 {
                     try
@@ -79,11 +119,20 @@ namespace TKVClient
                         }
                         int.Parse(writePair[1]);
                         Console.WriteLine("DADINT: [" + writePair[0] + ", " + writePair[1] + "]");
+                        
+                        writesList.Add(new DADINT { key = writePair[0], value = int.Parse(writePair[1]) });
+
                     }
                     catch (FormatException)
                     {
                         Console.WriteLine("Invalid write pair provided for transaction request.");
                     }
+                }
+
+                List<DADINT> dadintsRead = TxSubmit(command[0], reads.ToList(), writesList);
+                foreach (DADINT dadint in dadintsRead)
+                {
+                    Console.WriteLine("DADINT: [" + dadint.key + ", " + dadint.value + "]");
                 }
             }
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
