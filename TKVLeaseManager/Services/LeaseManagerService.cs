@@ -331,12 +331,12 @@ namespace TKVLeaseManager.Services
             // Select new leader
             var processesSuspected = _processesSuspectedPerInstance[_currentInstance - 1];
             var leader = int.MaxValue;
-            foreach (var process in processesSuspected)
-            {
-                // leaseManager process that is not suspected and has the lowest id
-                if (!process.Value && process.Key < leader && _leaseManagerHosts.ContainsKey(process.Key.ToString()))
-                    leader = process.Key;
-            }
+            ////foreach (var process in processesSuspected)
+            ////{
+            ////    // leaseManager process that is not suspected and has the lowest id
+            ////    if (!process.Value && process.Key < leader && _leaseManagerHosts.ContainsKey(process.Key.ToString()))
+            ////        leader = process.Key;
+            ////}
             
             Console.WriteLine($"Paxos leader is {leader} in instance {_currentInstance} for instance {request.Instance}");
 

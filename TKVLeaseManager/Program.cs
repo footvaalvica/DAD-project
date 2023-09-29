@@ -10,22 +10,22 @@ namespace TKVLeaseManager
     internal class Program
     {
         static System.Threading.Timer timer;
-        private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
+        private static void SetInstanceTimer(TimeSpan time, int instanceDuration, LeaseManagerService leaseManagerService)
         {
             TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
             if (timeToGo < TimeSpan.Zero)
             {
-                Console.WriteLine("Slot starting before finished server setup.");
+                Console.WriteLine("Instance starting before finished server setup.");
                 Console.WriteLine("Aborting...");
                 Environment.Exit(0);
                 return;
             }
 
-            // A thread will be created at timeToGo and after that, every slotDuration
+            // A thread will be created at timeToGo and after that, every instanceDuration
             timer = new Timer(x =>
             {
                 leaseManagerService.PrepareInstance();
-            }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
+            }, null, (int)timeToGo.TotalMilliseconds, instanceDuration);
         }
 
         static void Main(string[] args)
@@ -42,46 +42,46 @@ namespace TKVLeaseManager
 
             // Process data from config file to send to serverService
             int numberOfProcesses = config.NumberOfProcesses;
-            (int slotDuration, TimeSpan startTime) = config.SlotDetails;
+            (int instanceDuration, TimeSpan startTime) = config.SlotDetails;
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts = config.LeaseManagers.ToDictionary(
                 key => key.Id,
                 // !! not sure if this cast is alright? should be tho
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Id))
             );
-            List<Dictionary<string, List<String>>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
-            {
-                return states.ToDictionary(key => key.Key, value => value.Value.Suspects);
-            }).ToList();
-            List<bool> processFrozenPerSlot = config.ProcessStates.Select(states => states[processId].Frozen).ToList();
+            
+            var processesSuspectedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
+            var processCrashedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
 
-            // A process should not suspect itself (it knows if its frozen or not)
-            for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
-                processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
+            Console.WriteLine(processesSuspectedPerInstance);
 
-            LeaseManagerService leaseManagerService = new(processId, processFrozenPerSlot, processesSuspectedPerSlot, leaseManagerHosts);
+            // A process should not suspect itself (it knows if its Crashed or not)
+            ////for (var i = 0; i < processesSuspectedPerInstance.Count; i++)
+            ////    processesSuspectedPerInstance[i][processId.ToString()] = processCrashedPerInstance[i];
 
-            Server server = new()
-            {
-                Services = {
-                    Paxos.BindService(new PaxosService(leaseManagerService)),
-                    TransactionManager_LeaseManagerService.BindService(new RequestLeaseService(leaseManagerService))
-                },
-                Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
-            };
+            ////LeaseManagerService leaseManagerService = new(processId, processCrashedPerInstance, processesSuspectedPerInstance, leaseManagerHosts);
 
-            server.Start();
+            ////Server server = new()
+            ////{
+            ////    Services = {
+            ////        Paxos.BindService(new PaxosService(leaseManagerService)),
+            ////        TransactionManager_LeaseManagerService.BindService(new RequestLeaseService(leaseManagerService))
+            ////    },
+            ////    Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
+            ////};
 
-            Console.WriteLine($"leaseManager ({processId}) listening on port {port}");
-            Console.WriteLine($"First slot starts at {startTime} with intervals of {slotDuration} ms");
-            Console.WriteLine($"Working with {leaseManagerHosts.Count} leaseManager processes");
+            ////server.Start();
 
-            // Starts thread in timeSpan
-            SetSlotTimer(startTime, slotDuration, leaseManagerService);
+            ////Console.WriteLine($"leaseManager ({processId}) listening on port {port}");
+            ////Console.WriteLine($"First instance starts at {startTime} with intervals of {instanceDuration} ms");
+            ////Console.WriteLine($"Working with {leaseManagerHosts.Count} leaseManager processes");
+
+            ////// Starts thread in timeSpan
+            ////SetInstanceTimer(startTime, instanceDuration, leaseManagerService);
 
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();
 
-            server.ShutdownAsync().Wait();
+            ////server.ShutdownAsync().Wait();
         }
     }
 }
