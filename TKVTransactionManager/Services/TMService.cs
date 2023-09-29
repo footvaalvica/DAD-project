@@ -14,6 +14,10 @@ namespace TKVTransactionManager.Services
             this.serverService = serverService;
         }
 
+        public override Task<StatusResponse> Status(StatusRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.Status(request));
+        }
         // TODO: communication
     }
 }

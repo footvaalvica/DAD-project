@@ -2,6 +2,7 @@
 using TransactionManagerLeaseManagerServiceProto;
 using System.Data;
 using System.Globalization;
+using ClientTransactionManagerProto;
 
 namespace TKVTransactionManager.Services
 {
@@ -57,6 +58,11 @@ namespace TKVTransactionManager.Services
         public void PrepareSlot()
         {
             // TODO
+        }
+
+        public StatusResponse Status(StatusRequest statusRequest)
+        {
+            return new StatusResponse { Status = true };
         }
     }
 }

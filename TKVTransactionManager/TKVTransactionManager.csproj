@@ -17,7 +17,7 @@
     </PackageReference>
 	<Protobuf Include="..\Protos\TransactionManager_TransactionManager.proto" GrpcServices="Both" Link="Protos\TransactionManager_TransactionManager.proto" />
 	<Protobuf Include="..\Protos\Client_TransactionManager.proto" GrpcServices="Server" Link="Protos\Client_TransactionManager.proto" />
-	  <Protobuf Include="..\Protos\TransactionManager_LeaseManager.proto" GrpcServices="Client" Link="Protos\TransactionManager_LeaseManager.proto" />
+	<Protobuf Include="..\Protos\TransactionManager_LeaseManager.proto" GrpcServices="Client" Link="Protos\TransactionManager_LeaseManager.proto" />
   </ItemGroup>
 
   <ItemGroup>

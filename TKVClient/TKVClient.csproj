@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -10,7 +10,15 @@
 
   <ItemGroup>
     <Folder Include="Services\" />
+	<PackageReference Include="Google.Protobuf" Version="3.24.3" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.57.0" />
+	<PackageReference Include="Grpc.Core" Version="2.46.6" />
+	<PackageReference Include="Grpc.Tools" Version="2.58.0">
+		<PrivateAssets>all</PrivateAssets>
+		<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	</PackageReference>
 	<ProjectReference Include="..\Utilities\Utilities.csproj" />
+	<Protobuf Include="..\Protos\Client_TransactionManager.proto" GrpcServices="Client" Link="Protos\Client_TransactionManager.proto" />
   </ItemGroup>
 
 </Project>

@@ -1,7 +1,11 @@
-﻿using Utilities;
+﻿using Grpc.Net.Client;
+using Utilities;
+using ClientTransactionManagerProto;
+using System.Diagnostics;
 
 namespace TKVClient
 {
+    using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
     internal class Program
     {
         static void Wait(string[] command)
@@ -18,6 +22,34 @@ namespace TKVClient
             catch (FormatException)
             {
                 Console.WriteLine("Invalid time amount provided for wait.");
+            }
+        }
+
+        static void StatusRequest(string[] command, TransactionManagers transactionManagers)
+        {
+            StatusRequest request = new StatusRequest();
+
+            List<Task> tasks = new List<Task>();
+            foreach (var tm in transactionManagers)
+            {
+                Task t = Task.Run(() =>
+                {
+                    try
+                    {
+                        StatusResponse statusResponse = tm.Value.Status(request);
+                        // TODO: primary???
+                        if (statusResponse.Status)
+                            Console.WriteLine($"Status: Transaction Manager with id ({tm.Key}) is alive!");
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+
+                    return Task.CompletedTask;
+                });
+
+                tasks.Add(t);
             }
         }
 
@@ -44,7 +76,8 @@ namespace TKVClient
                         }
                         int.Parse(writePair[1]);
                         Console.WriteLine("DADINT: [" + writePair[0] + ", " + writePair[1] + "]");
-                    } catch (FormatException)
+                    }
+                    catch (FormatException)
                     {
                         Console.WriteLine("Invalid write pair provided for transaction request.");
                     }
@@ -53,11 +86,12 @@ namespace TKVClient
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
         }
 
-        static bool HandleCommand(string command)
+        static bool HandleCommand(string command, TransactionManagers transactionManagers)
         {
             string[] commandArgs = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-            if (command.Length == 0) { 
+            if (command.Length == 0)
+            {
                 Console.WriteLine("No command provided.");
                 return true;
             }
@@ -72,9 +106,9 @@ namespace TKVClient
                     Console.WriteLine("Processing transaction request...");
                     TransactionRequest(commandArgs);
                     break;
-                case "x":
+                case "s":
                     Console.WriteLine("Sending status request...");
-                    // TODO: send status request
+                    StatusRequest(commandArgs, transactionManagers);
                     break;
                 case "q":
                     Console.WriteLine("Closing client...");
@@ -112,10 +146,17 @@ namespace TKVClient
             // TODO: process config file
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
+            // Process data from config file
+            TransactionManagers transactionManagers = config.TransactionManagers.ToDictionary(key => key.Id, value =>
+            {
+                GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
+                return new Client_TransactionManagerService.Client_TransactionManagerServiceClient(channel);
+            });
+
             // Read client scripts
             string baseDirectory = Common.GetSolutionDir();
             string scriptFilePath = Path.Join(baseDirectory, "TKVClient", "Scripts", scriptName + ".txt");
-            Console.WriteLine("Using script (" + scriptFilePath +") for TKVClient.");
+            Console.WriteLine("Using script (" + scriptFilePath + ") for TKVClient.");
 
             string[] commands;
             try { commands = File.ReadAllLines(scriptFilePath); }
@@ -133,7 +174,9 @@ namespace TKVClient
 
             int clientTimestamp = 0;
 
-            foreach (string command in commands) { HandleCommand(command); }
+            foreach (string command in commands) { HandleCommand(command, transactionManagers); }
+
+            while (Console.ReadKey().Key != ConsoleKey.Q) { };
         }
     }
 }
