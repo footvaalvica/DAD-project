@@ -8,6 +8,7 @@ namespace TKVClient
     using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
     internal class Program
     {
+        static TransactionManagers? transactionManagers = null;
         static void Wait(string[] command)
         {
             try
@@ -25,7 +26,7 @@ namespace TKVClient
             }
         }
 
-        static void StatusRequest(string[] command, TransactionManagers transactionManagers)
+        static bool Status()
         {
             StatusRequest request = new StatusRequest();
 
@@ -51,7 +52,8 @@ namespace TKVClient
 
                 tasks.Add(t);
             }
-            Task.WaitAll(tasks.ToArray());  
+            Task.WaitAll(tasks.ToArray());
+            return true;
         }
 
         static void TransactionRequest(string[] command)
@@ -109,7 +111,7 @@ namespace TKVClient
                     break;
                 case "s":
                     Console.WriteLine("Sending status request...");
-                    StatusRequest(commandArgs, transactionManagers);
+                    _ = Status();
                     break;
                 case "q":
                     Console.WriteLine("Closing client...");
@@ -148,7 +150,7 @@ namespace TKVClient
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
             // Process data from config file
-            TransactionManagers transactionManagers = config.TransactionManagers.ToDictionary(key => key.Id, value =>
+            transactionManagers = config.TransactionManagers.ToDictionary(key => key.Id, value =>
             {
                 GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
                 return new Client_TransactionManagerService.Client_TransactionManagerServiceClient(channel);
