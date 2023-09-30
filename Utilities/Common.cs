@@ -11,13 +11,20 @@ namespace Utilities
     {
         public string Id { get; }
         public string Type { get; }
-        public string Url { get; }
+        public string? Url { get; }
 
         public ProcessInfo(string id, string type, string url)
         {
             Id = id;
             Type = type;
             Url = url;
+        }
+
+        public ProcessInfo(string id, string type)
+        {
+            Id = id;
+            Type = type;
+            Url = null;
         }
     }
 
@@ -35,6 +42,7 @@ namespace Utilities
 
     public struct TKVConfig
     {
+        public Dictionary<string, string> Client2TM { get; set; }
         public List<ProcessInfo> TransactionManagers { get; }
         public List<ProcessInfo> LeaseManagers { get; }
         public int NumberOfProcesses { get; }
@@ -42,8 +50,9 @@ namespace Utilities
 
         public Dictionary<string, ProcessState>[] ProcessStates { get; }
 
-        public TKVConfig(List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<string, ProcessState>[] processStates)
+        public TKVConfig(Dictionary<string, string> client2TM, List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<string, ProcessState>[] processStates)
         {
+            this.Client2TM = client2TM;
             this.TransactionManagers = transactionManagers;
             this.LeaseManagers = leaseManagers;
             this.NumberOfProcesses = numberOfProcesses;
@@ -75,11 +84,13 @@ namespace Utilities
 
             int slotDuration = -1;
             TimeSpan startTime = new TimeSpan();
-            Dictionary<string, ProcessState>[] processStates = null; // TODO: ??? array of dicts??
+            Dictionary<string, ProcessState>[] processStates = null;
             List<ProcessInfo> transactionManagers = new List<ProcessInfo>();
             List<ProcessInfo> leaseManagers = new List<ProcessInfo>();
             List<ProcessInfo> servers = new();
+            Dictionary<string, string> client2TM = new(); // lets client know which tm to use
             int numberOfSlots = 0;
+            int readClients = 0;
 
             foreach (string command in commands)
             {
@@ -103,6 +114,17 @@ namespace Utilities
                             Console.WriteLine("Invalid process type.");
                             break;
                     }
+                }
+
+                else if (args[0].Equals("P")) // client
+                {
+                    string processId = args[1];
+                    ProcessInfo processInfo = new ProcessInfo(processId, args[2]);
+                    if (readClients == transactionManagers.Count)
+                    {
+                        readClients = 0; // round-robin
+                    }
+                    client2TM.Add(processId, transactionManagers[readClients++].Id);
                 }
 
                 else if (args[0].Equals("T"))
@@ -160,7 +182,7 @@ namespace Utilities
                     }
                 }
             }
-            return new TKVConfig(transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates ?? Array.Empty<Dictionary<string, ProcessState>>());
+            return new TKVConfig(client2TM, transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
         }
     }
 

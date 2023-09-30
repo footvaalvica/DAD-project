@@ -1,8 +1,11 @@
 syntax = "proto3";
 
-package Client_TransactionManagerServiceProto;
+package Client_TransactionManagerProto;
 
-import "Transaction.proto";
+message DADInt {
+	string key = 1;
+	int32 value = 2;
+}
 
 message TransactionRequest {
 	string id = 1;
@@ -14,7 +17,13 @@ message TransactionResponse {
 	repeated DADInt response = 1;
 }
 
+message StatusRequest { }
+
+message StatusResponse {
+	bool status = 1;
+}
+
 service Client_TransactionManagerService {
-	rpc Submit(TransactionRequest) returns (TransactionResponse);
+	rpc TxSubmit(TransactionRequest) returns (TransactionResponse);
 	rpc Status(StatusRequest) returns (StatusResponse);
 }

@@ -1,56 +1,28 @@
-﻿using TransactionManagerTransactionManagerProto;
-using System.Data;
-using System.Globalization;
+using Grpc.Core;
+using System.Threading.Tasks;
+using TKVTransactionManager.Services;
+using ClientTransactionManagerProto;
 
 namespace TKVTransactionManager.Services
 {
-    public class TMService
+    public class TMService : Client_TransactionManagerService.Client_TransactionManagerServiceBase
     {
-        // Config file variables
-        private readonly int processId;
-        private readonly List<bool> processCrashedPerSlot; // TODO: rename to processe**s**
-        private readonly List<Dictionary<int, bool>> processesSuspectedPerSlot;
-        private readonly Dictionary<int, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers;
-        // private readonly Dictionary<int, CompareAndSwap.CompareAndSwapClient> leaseManagers; // TODO: fix the service / see if its correct
+        private readonly ServerService serverService;
 
-        // Paxos variables
-        private bool isCrashed;
-        private int totalSlots;   // The number of total slots elapsed since the beginning of the program
-        private int currentSlot;  // The number of experienced slots (process may be frozen and not experience all slots)
-        private readonly Dictionary<int, int> primaryPerSlot;
-
-        // Replication variables
-        private decimal balance;
-        private bool isCleanning;
-        private int currentSequenceNumber;
-        //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
-        //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
-
-        public TMService(
-            int processId,
-            List<bool> processCrashedPerSlot,
-            List<Dictionary<int, bool>> processesSuspectedPerSlot,
-            Dictionary<int, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers
-            // Dictionary<int, CompareAndSwap.CompareAndSwapClient> leaseManagers
-            )
+        public TMService(ServerService serverService)
         {
-            this.processId = processId;
-            this.transactionManagers = transactionManagers;
-            //this.leaseManagers = leaseManagers;
-            this.processCrashedPerSlot = processCrashedPerSlot;
-            this.processesSuspectedPerSlot = processesSuspectedPerSlot;
-
-            this.balance = 0;
-            this.isCrashed = false;
-            this.totalSlots = 0;
-            this.currentSlot = 0;
-            this.currentSequenceNumber = 0;
-            this.primaryPerSlot = new Dictionary<int, int>();
-
-            this.isCleanning = false;
-            //this.tentativeCommands = new Dictionary<(int, int), ClientCommand>(); // TODO: client commands
-            //this.committedCommands = new Dictionary<(int, int), ClientCommand>();
+            this.serverService = serverService;
         }
-        // TODO : etc...
+
+        public override Task<StatusResponse> Status(StatusRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.Status(request));
+        }
+
+        public override Task<TransactionResponse> TxSubmit(TransactionRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.TxSubmit(request));
+        }
+        // TODO: communication
     }
 }

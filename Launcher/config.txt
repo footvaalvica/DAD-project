@@ -11,7 +11,7 @@
 # A P command for a server has a string indentifying the server e.g. "TM1"
 # a character indicating whether it's a (T)ransaction or (L)ease manager
 # and a URL for g-RPC calls.
-P TM1 T http://1.2.3.4:10000
+P TM1 T http://127.0.0.1:8888
 P TM2 T http://1.2.3.4:10002
 P TM3 T http://1.2.3.4:10003
 P LeaseManager1 L http://1.2.3.4:10004

@@ -6,11 +6,11 @@ namespace TKVTransactionManager.Services
 {
     public class TwoPhaseCommitService : TwoPhaseCommit.TwoPhaseCommitBase
     {
-        private readonly TMService tmService;
+        private readonly ServerService serverService;
 
-        public TwoPhaseCommitService(TMService tmService)
+        public TwoPhaseCommitService(ServerService serverService)
         {
-            this.tmService = tmService;
+            this.serverService = serverService;
         }
 
         //public override Task<TentativeReply> Tentative(TentativeRequest request, ServerCallContext context)

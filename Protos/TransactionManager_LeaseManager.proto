@@ -20,4 +20,17 @@ service TransactionManager_LeaseManagerService {
 	rpc Lease(LeaseRequest) returns (LeaseResponse);
 }
 
-// TODO
+// TODO: check whats relevant/needed
+
+message CompareAndSwapRequest {
+	int32 slot = 1;
+	int32 invalue = 2;
+}
+message CompareAndSwapReply {
+	int32 slot = 1;
+	int32 outvalue = 2;
+}
+
+service CompareAndSwap {
+  rpc CompareAndSwap(CompareAndSwapRequest) returns (CompareAndSwapReply);
+}

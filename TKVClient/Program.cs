@@ -1,9 +1,17 @@
-﻿using Utilities;
+﻿using Grpc.Net.Client;
+using Utilities;
+using ClientTransactionManagerProto;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace TKVClient
 {
+    using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
+    using DADINT = ClientTransactionManagerProto.DADInt;
     internal class Program
     {
+        static TransactionManagers? transactionManagers = null;
+        static TKVConfig config;
         static void Wait(string[] command)
         {
             try
@@ -21,60 +29,144 @@ namespace TKVClient
             }
         }
 
-        static void TransactionRequest(string[] command)
+        static bool Status()
+        {
+            StatusRequest request = new StatusRequest();
+
+            List<Task> tasks = new List<Task>();
+            foreach (var tm in transactionManagers)
+            {
+                Task t = Task.Run(() =>
+                {
+                    try
+                    {
+                        StatusResponse statusResponse = tm.Value.Status(request);
+                        // TODO: primary???
+                        if (statusResponse.Status)
+                            Console.WriteLine($"Status: Transaction Manager with id ({tm.Key}) is alive!");
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+
+                    return Task.CompletedTask;
+                });
+
+                tasks.Add(t);
+            }
+            Task.WaitAll(tasks.ToArray());
+            return true;
+        }
+
+        static List<DADINT> TxSubmit(string id, List<String> reads, List<DADINT> writes)
+        {
+            TransactionRequest request = new TransactionRequest { Id = id };
+            request.Reads.AddRange(reads);
+            request.Writes.AddRange(writes);
+
+            // TODO: check if transaction manager is alive
+            // If it isn't, change index to next transaction manager
+
+            // send request to transaction manager
+            try
+            {
+                TransactionResponse response = transactionManagers[config.Client2TM[id]].TxSubmit(request);
+                if (response.Response != null)
+                {
+                    Console.WriteLine("Transaction successful!");
+                    return response.Response.Select(read => new DADINT { Key = read.Key, Value = read.Value }).ToList();
+                }
+                else
+                {
+                    Console.WriteLine("Transaction failed!");
+                }
+            }
+            catch (Grpc.Core.RpcException e)
+            {
+                Console.WriteLine(e.Status);
+            }   
+
+            return new List<DADINT>();
+        }
+
+        static void TransactionRequest(string[] command, string processId)
         {
             if (command.Length == 3)
             {
-                string[] reads = command[1].Split(',', StringSplitOptions.RemoveEmptyEntries);
-                string[] writes = command[2].Split(',', StringSplitOptions.RemoveEmptyEntries);
+                // Remove parenthesis and etc
+                string[] reads = command[1].Substring(1, command[1].Length - 2)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries);
+                reads = reads.Select(read => read.Trim('"')).ToArray();
 
                 foreach (string read in reads)
                 {
                     Console.WriteLine("DADINT: [" + read + "]");
                 }
-                foreach (string write in writes)
+
+                Regex rg = new Regex(@"<""([^""]+)"",(\d+)>");
+                MatchCollection matched = rg.Matches(command[2]);
+
+                List<DADINT> writesList = new List<DADINT>();
+                foreach (Match match in matched)
                 {
-                    try
+                    if (match.Groups.Count % 2 != 1)
                     {
-                        string[] writePair = write.Split(':', StringSplitOptions.RemoveEmptyEntries); // TODO??
-                        if (writePair.Length != 2)
+                        Console.WriteLine("Invalid transaction request.");
+                        continue;
+                    }
+                    for (int i = 1; i < match.Groups.Count; i += 2)
+                    {
+                        string key = match.Groups[i].Value;
+                        string number = match.Groups[i + 1].Value;
+                        try
+                        {
+                            Console.WriteLine("DADINT: [" + key + ", " + number + "]");
+
+                            writesList.Add(new DADINT { Key = key, Value = int.Parse(number) });
+
+                        }
+                        catch (FormatException)
                         {
                             Console.WriteLine("Invalid write pair provided for transaction request.");
-                            return;
                         }
-                        int.Parse(writePair[1]);
-                        Console.WriteLine("DADINT: [" + writePair[0] + ", " + writePair[1] + "]");
-                    } catch (FormatException)
-                    {
-                        Console.WriteLine("Invalid write pair provided for transaction request.");
                     }
+                }
+
+                List<DADINT> dadintsRead = TxSubmit(processId, reads.ToList(), writesList);
+                foreach (DADINT dadint in dadintsRead)
+                {
+                    Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]");
                 }
             }
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
         }
 
-        static bool HandleCommand(string command)
+        static bool HandleCommand(string command, string processId, TransactionManagers transactionManagers)
         {
             string[] commandArgs = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-            if (command.Length == 0) { 
+            if (command.Length == 0)
+            {
                 Console.WriteLine("No command provided.");
                 return true;
             }
 
             switch (commandArgs[0].ToLower())
             {
+                case "#":
+                    break;
                 case "w":
                     Console.WriteLine("Client set to wait...");
                     Wait(commandArgs);
                     break;
                 case "t":
                     Console.WriteLine("Processing transaction request...");
-                    TransactionRequest(commandArgs);
+                    TransactionRequest(commandArgs, processId);
                     break;
-                case "x":
+                case "s":
                     Console.WriteLine("Sending status request...");
-                    // TODO: send status request
+                    _ = Status();
                     break;
                 case "q":
                     Console.WriteLine("Closing client...");
@@ -102,7 +194,6 @@ namespace TKVClient
 
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
 
-            TKVConfig config;
             try { config = Common.ReadConfig(); }
             catch (Exception)
             {
@@ -112,10 +203,17 @@ namespace TKVClient
             // TODO: process config file
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
+            // Process data from config file
+            transactionManagers = config.TransactionManagers.ToDictionary(key => key.Id, value =>
+            {
+                GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
+                return new Client_TransactionManagerService.Client_TransactionManagerServiceClient(channel);
+            });
+
             // Read client scripts
             string baseDirectory = Common.GetSolutionDir();
             string scriptFilePath = Path.Join(baseDirectory, "TKVClient", "Scripts", scriptName + ".txt");
-            Console.WriteLine("Using script (" + scriptFilePath +") for TKVClient.");
+            Console.WriteLine("Using script (" + scriptFilePath + ") for TKVClient.");
 
             string[] commands;
             try { commands = File.ReadAllLines(scriptFilePath); }
@@ -133,7 +231,10 @@ namespace TKVClient
 
             int clientTimestamp = 0;
 
-            foreach (string command in commands) { HandleCommand(command); }
+            foreach (string command in commands) { HandleCommand(command, processId, transactionManagers); }
+
+            Console.WriteLine("Press q to exit.");
+            while (Console.ReadKey().Key != ConsoleKey.Q) { };
         }
     }
 }

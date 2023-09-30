@@ -1,7 +1,10 @@
 ﻿using TKVTransactionManager.Services;
 using Utilities;
-using TransactionManagerTransactionManagerProto;
 using Grpc.Net.Client;
+using Grpc.Core;
+using ClientTransactionManagerProto;
+using TransactionManagerTransactionManagerProto;
+using TransactionManagerLeaseManagerServiceProto;
 
 namespace TKVTransactionManager
 {
@@ -9,23 +12,25 @@ namespace TKVTransactionManager
     {
         static System.Threading.Timer timer;
 
-        //static private void SetSlotTimer(TimeSpan time, int slotDuration, TMService tmService)
-        //{
-        //    TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
-        //    if (timeToGo < TimeSpan.Zero)
-        //    {
-        //        Console.WriteLine("Slot starting before finished server setup.");
-        //        Console.WriteLine("Aborting...");
-        //        Environment.Exit(0);
-        //        return;
-        //    }
+        // TODO: change this back before submitting
 
-        //    // A thread will be created at timeToGo and after that, every slotDuration
-        //    timer = new System.Threading.Timer(x =>
-        //    {
-        //        tmService.PrepareSlot();
-        //    }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
-        //}
+        static private void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
+        {
+            TimeSpan timeToGo = TimeSpan.Zero; //  time - DateTime.Now.TimeOfDay;
+            if (timeToGo < TimeSpan.Zero)
+            {
+                Console.WriteLine("Slot starting before finished server setup.");
+                Console.WriteLine("Aborting...");
+                Environment.Exit(0);
+                return;
+            }
+
+            // A thread will be created at timeToGo and after that, every slotDuration
+            timer = new System.Threading.Timer(x =>
+            {
+                serverService.PrepareSlot();
+            }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
+        }
 
         static void Main(string[] args)
         {
@@ -49,19 +54,30 @@ namespace TKVTransactionManager
             int numberOfProcesses = config.NumberOfProcesses;
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
-            // TKVTransactionM <-> TKVTransactionM
+            // TransactionM <-> TransactionM
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers = config.TransactionManagers.ToDictionary(
                 key => key.Id,
                 value => new TwoPhaseCommit.TwoPhaseCommitClient(GrpcChannel.ForAddress(value.Url))
             );
-            // TKVTransactionM <-> TKVLeaseM
-            // TODO
+            // TransactionM <-> LeaseM
+            Dictionary<string, CompareAndSwap.CompareAndSwapClient> leaseManagers = config.LeaseManagers.ToDictionary(
+                key => key.Id,
+                value => new CompareAndSwap.CompareAndSwapClient(GrpcChannel.ForAddress(value.Url))
+            );
 
-            // TODO
-            //List<Dictionary<string, bool>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
-            //{
-            //    return states.ToDictionary(key => key.Key, value => value.Value.Suspected);
-            //}).ToList();
+            List<ProcessState> statePerSlot = new List<ProcessState>(); // Podia so ir buscar sempre ao dictionary ig
+            foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
+            {
+                if (dict != null)
+                {
+                    dict.TryGetValue(processId, out ProcessState processState);
+                    statePerSlot.Add(processState);
+                }
+                else
+                {
+                    statePerSlot.Add(statePerSlot.Last()); // Podia deixar so a null
+                }
+            }
 
             // TODO: Check if this is correct
             //List<bool> processCrashedPerSlot = config.ProcessStates.Select(states => states[processId].Crashed).ToList();
@@ -70,30 +86,30 @@ namespace TKVTransactionManager
             //for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
             //    processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            //TMService tmService = new(processId, processCrashedPerSlot, processesSuspectedPerSlot, transactionManagers, leaseManagers);
+            ServerService serverService = new(processId, transactionManagers, leaseManagers); // processCrashedPerSlot, processesSuspectedPerSlot, 
 
-            //Server server = new Server
-            //{
-            //    Services = {
-            //        Bank.BindService(new BankService(serverService)),
-            //        TwoPhaseCommit.BindService(new TwoPhaseCommitService(serverService)),
-            //    },
-            //    Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
-            //};
+            Server server = new Server
+            {
+                Services = {
+                    Client_TransactionManagerService.BindService(new TMService(serverService)),
+                    TwoPhaseCommit.BindService(new TwoPhaseCommitService(serverService)),
+                },
+                Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
+            };
 
-            //server.Start();
+            server.Start();
 
             Console.WriteLine($"Transaction Manager with id ({processId}) listening on port {port}");
             Console.WriteLine($"First slot starts at {startTime} with intervals of {slotDuration} ms");
             Console.WriteLine($"Working with {transactionManagers.Count} TMs"); //  and {leaseManagers.Count} boney processes
 
             // Starts a new thread for each slot
-            //SetSlotTimer(startTime, slotDuration, tmService);
+            SetSlotTimer(startTime, slotDuration, serverService);
 
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();
 
-            //server.ShutdownAsync().Wait();
+            server.ShutdownAsync().Wait();
         }
     }
 }
