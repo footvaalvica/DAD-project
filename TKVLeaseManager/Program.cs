@@ -10,22 +10,22 @@ namespace TKVLeaseManager
     internal class Program
     {
         static System.Threading.Timer timer;
-        private static void SetInstanceTimer(TimeSpan time, int instanceDuration, LeaseManagerService leaseManagerService)
+        private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
         {
             TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
             if (timeToGo < TimeSpan.Zero)
             {
-                Console.WriteLine("Instance starting before finished server setup.");
+                Console.WriteLine("Slot starting before finished server setup.");
                 Console.WriteLine("Aborting...");
                 Environment.Exit(0);
                 return;
             }
 
-            // A thread will be created at timeToGo and after that, every instanceDuration
+            // A thread will be created at timeToGo and after that, every slotDuration
             timer = new Timer(x =>
             {
-                leaseManagerService.PrepareInstance();
-            }, null, (int)timeToGo.TotalMilliseconds, instanceDuration);
+                leaseManagerService.PrepareSlot();
+            }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
         }
 
         static void Main(string[] args)
@@ -42,7 +42,7 @@ namespace TKVLeaseManager
 
             // Process data from config file to send to serverService
             int numberOfProcesses = config.NumberOfProcesses;
-            (int instanceDuration, TimeSpan startTime) = config.SlotDetails;
+            (int slotDuration, TimeSpan startTime) = config.SlotDetails;
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts = config.LeaseManagers.ToDictionary(
                 key => key.Id,
                 // !! not sure if this cast is alright? should be tho
@@ -63,13 +63,13 @@ namespace TKVLeaseManager
                 }
             }
             
-            ////var processesSuspectedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
-            ////var processCrashedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
+            ////var processesSuspectedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
+            ////var processCrashedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
 
 
             ////A process should not suspect itself(it knows if its Crashed or not)
-            ////for (var i = 0; i < processesSuspectedPerInstance.Count; i++)
-            ////    processesSuspectedPerInstance[i][processId.ToString()] = processCrashedPerInstance[i];
+            ////for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
+            ////    processesSuspectedPerSlot[i][processId.ToString()] = processCrashedPerSlot[i];
 
             LeaseManagerService leaseManagerService = new(processId, leaseManagerHosts);
 
@@ -85,11 +85,11 @@ namespace TKVLeaseManager
             server.Start();
 
             Console.WriteLine($"leaseManager ({processId}) listening on port {port}");
-            Console.WriteLine($"First instance starts at {startTime} with intervals of {instanceDuration} ms");
+            Console.WriteLine($"First slot starts at {startTime} with intervals of {slotDuration} ms");
             Console.WriteLine($"Working with {leaseManagerHosts.Count} leaseManager processes");
 
             // Starts thread in timeSpan
-            SetInstanceTimer(startTime, instanceDuration, leaseManagerService);
+            SetSlotTimer(startTime, slotDuration, leaseManagerService);
 
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();

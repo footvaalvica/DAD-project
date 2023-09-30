@@ -4,14 +4,14 @@ using LeaseManagerLeaseManagerServiceProto;
 
 namespace TKVLeaseManager.Domain
 {
-    public class InstanceData
+    public class SlotData
     {
         // Learners keep a list of decided values to know when a majority was
         // achieved and reply to the client with the final value
 
-        public InstanceData(int instance)
+        public SlotData(int slot)
         {
-            this.Instance = instance;
+            this.Slot = slot;
             this.IsPaxosRunning = false;
             this.DecidedValue = new Lease
             {
@@ -29,7 +29,7 @@ namespace TKVLeaseManager.Domain
             this.DecidedReceived = new List<(int, Lease)>();
         }
 
-        public int Instance { get; set; }
+        public int Slot { get; set; }
         
         public bool IsPaxosRunning { get; set; }
 
