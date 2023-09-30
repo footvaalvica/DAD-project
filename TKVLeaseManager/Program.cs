@@ -32,10 +32,10 @@ namespace TKVLeaseManager
         {
             AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
-            // Command Line Arguments
-            int processId = int.Parse(args[0]);
+            string processId = args[0];
             string host = args[1];
             int port = int.Parse(args[2]);
+            bool debug = args.Length > 3 && args[3].Equals("debug");
 
             // Data from config file
             TKVConfig config = Common.ReadConfig();
@@ -46,37 +46,50 @@ namespace TKVLeaseManager
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts = config.LeaseManagers.ToDictionary(
                 key => key.Id,
                 // !! not sure if this cast is alright? should be tho
-                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Id))
+                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))
             );
+
+            List<ProcessState> statePerSlot = new List<ProcessState>(); // Podia so ir buscar sempre ao dictionary ig
+            foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
+            {
+                if (dict != null)
+                {
+                    dict.TryGetValue(processId, out ProcessState processState);
+                    statePerSlot.Add(processState);
+                }
+                else
+                {
+                    statePerSlot.Add(statePerSlot.Last()); // Podia deixar so a null
+                }
+            }
             
-            var processesSuspectedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
-            var processCrashedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
+            ////var processesSuspectedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
+            ////var processCrashedPerInstance = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
 
-            Console.WriteLine(processesSuspectedPerInstance);
 
-            // A process should not suspect itself (it knows if its Crashed or not)
+            ////A process should not suspect itself(it knows if its Crashed or not)
             ////for (var i = 0; i < processesSuspectedPerInstance.Count; i++)
             ////    processesSuspectedPerInstance[i][processId.ToString()] = processCrashedPerInstance[i];
 
-            ////LeaseManagerService leaseManagerService = new(processId, processCrashedPerInstance, processesSuspectedPerInstance, leaseManagerHosts);
+            LeaseManagerService leaseManagerService = new(processId, leaseManagerHosts);
 
-            ////Server server = new()
-            ////{
-            ////    Services = {
-            ////        Paxos.BindService(new PaxosService(leaseManagerService)),
-            ////        TransactionManager_LeaseManagerService.BindService(new RequestLeaseService(leaseManagerService))
-            ////    },
-            ////    Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
-            ////};
+            Server server = new Server
+            {
+                Services = {
+                    Paxos.BindService(new PaxosService(leaseManagerService)),
+                    TransactionManager_LeaseManagerService.BindService(new RequestLeaseService(leaseManagerService))
+                },
+                Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
+            };
 
-            ////server.Start();
+            server.Start();
 
-            ////Console.WriteLine($"leaseManager ({processId}) listening on port {port}");
-            ////Console.WriteLine($"First instance starts at {startTime} with intervals of {instanceDuration} ms");
-            ////Console.WriteLine($"Working with {leaseManagerHosts.Count} leaseManager processes");
+            Console.WriteLine($"leaseManager ({processId}) listening on port {port}");
+            Console.WriteLine($"First instance starts at {startTime} with intervals of {instanceDuration} ms");
+            Console.WriteLine($"Working with {leaseManagerHosts.Count} leaseManager processes");
 
-            ////// Starts thread in timeSpan
-            ////SetInstanceTimer(startTime, instanceDuration, leaseManagerService);
+            // Starts thread in timeSpan
+            SetInstanceTimer(startTime, instanceDuration, leaseManagerService);
 
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();

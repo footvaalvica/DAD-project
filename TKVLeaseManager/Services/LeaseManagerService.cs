@@ -9,34 +9,34 @@ namespace TKVLeaseManager.Services
     {
         // Config file variables
         private int _processId;
-        private readonly List<bool> _processFrozenPerInstance;
+        ////private readonly List<bool> _processFrozenPerInstance;
         private readonly Dictionary<string, Paxos.PaxosClient> _leaseManagerHosts;
-        private readonly List<Dictionary<string, List<String>>> _processesSuspectedPerInstance;
+        ////private readonly List<Dictionary<string, List<String>>> _processesSuspectedPerInstance;
 
         // Changing variables
-        private bool _isFrozen;
+        ////private bool _isFrozen;
         private int _currentInstance;
         private readonly ConcurrentDictionary<int, InstanceData> _instances;
 
         public LeaseManagerService(
-            int processId,
-            List<bool> processFrozenPerInstance,
-            List<Dictionary<string, List<String>>> processesSuspectedPerInstance,
+            string processId,
+            ////List<bool> processFrozenPerInstance,
+            ////List<Dictionary<string, List<String>>> processesSuspectedPerInstance,
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts
             )
         {
-            _processId = processId;
+            _processId = processId[^1];
             _leaseManagerHosts = leaseManagerHosts;
-            _processFrozenPerInstance = processFrozenPerInstance;
-            _processesSuspectedPerInstance = processesSuspectedPerInstance;
+            ////_processFrozenPerInstance = processFrozenPerInstance;
+            ////_processesSuspectedPerInstance = processesSuspectedPerInstance;
 
             _currentInstance = 0;
-            _isFrozen = false;
+            ////_isFrozen = false;
 
             _instances = new();
             // Initialize instances
-            for (var i = 1; i <= processFrozenPerInstance.Count; i++)
-                _instances.TryAdd(i, new(i));
+            ////for (var i = 1; i <= processFrozenPerInstance.Count; i++)
+            ////    _instances.TryAdd(i, new(i));
         }
 
         /*
@@ -47,20 +47,20 @@ namespace TKVLeaseManager.Services
         public void PrepareInstance()
         {
             Monitor.Enter(this);
-            if (_currentInstance >= _processFrozenPerInstance.Count)
-            {
-                Console.WriteLine("Instance duration ended but no more instances to process.");
-                return;
-            }
+            ////if (_currentInstance >= _processFrozenPerInstance.Count)
+            ////{
+            ////    Console.WriteLine("Instance duration ended but no more instances to process.");
+            ////    return;
+            ////}
 
             Console.WriteLine("Preparing new instance -----------------------");
 
             // Switch process state
-            _isFrozen = _processFrozenPerInstance[_currentInstance];
+            ////_isFrozen = _processFrozenPerInstance[_currentInstance];
             if (_currentInstance > 0)
                 _instances[_currentInstance].IsPaxosRunning = false;
             Monitor.PulseAll(this);
-            Console.WriteLine($"Process is now {(_isFrozen ? "frozen" : "normal")} for instance {_currentInstance+1}");
+            ////Console.WriteLine($"Process is now {(_isFrozen ? "frozen" : "normal")} for instance {_currentInstance+1}");
 
             _currentInstance += 1;
 
@@ -79,15 +79,15 @@ namespace TKVLeaseManager.Services
         public PromiseReply PreparePaxos(PrepareRequest request)
         {
             Monitor.Enter(this);
-            while (_isFrozen)
-            {
-                Monitor.Wait(this);
-            }
+            ////while (_isFrozen)
+            ////{
+            ////    Monitor.Wait(this);
+            ////}
 
             var instance = _instances[request.Instance];
   
-            if (instance.ReadTimestamp < request.LeaderId)
-                instance.ReadTimestamp = request.LeaderId;
+            if (instance.ReadTimestamp < request.LeaderId[^1])
+                instance.ReadTimestamp = request.LeaderId[^1];
 
             var reply = new PromiseReply
             {
@@ -96,7 +96,7 @@ namespace TKVLeaseManager.Services
                 Lease = instance.WrittenValue,
             };
 
-            Console.WriteLine($"({request.Instance})    Received Prepare({request.LeaderId})");
+            Console.WriteLine($"({request.Instance})    Received Prepare({request.LeaderId[^1]})");
             Console.WriteLine($"({request.Instance})        Answered Promise({instance.ReadTimestamp},{instance.WrittenValue})");
 
             Monitor.Exit(this);
@@ -106,18 +106,18 @@ namespace TKVLeaseManager.Services
         public AcceptedReply AcceptPaxos(AcceptRequest request)
         {
             Monitor.Enter(this);
-            while (_isFrozen)
-            {
-                Monitor.Wait(this);
-            }
+            ////while (_isFrozen)
+            ////{
+            ////    Monitor.Wait(this);
+            ////}
 
             var instance = _instances[request.Instance];
 
-            Console.WriteLine($"({request.Instance})    Recevied Accept({request.LeaderId}, {request.Lease})");
+            Console.WriteLine($"({request.Instance})    Recevied Accept({request.LeaderId[^1]}, {request.Lease})");
 
-            if (instance.ReadTimestamp == request.LeaderId)
+            if (instance.ReadTimestamp == request.LeaderId[^1])
             {
-                instance.WriteTimestamp = request.LeaderId;
+                instance.WriteTimestamp = request.LeaderId[^1];
                 instance.WrittenValue = request.Lease;
 
                 // Acceptors send the information to Learners
@@ -140,10 +140,10 @@ namespace TKVLeaseManager.Services
         public DecideReply DecidePaxos(DecideRequest request)
         {
             Monitor.Enter(this);
-            while (_isFrozen)
-            {
-                Monitor.Wait(this);
-            }
+            ////while (_isFrozen)
+            ////{
+            ////    Monitor.Wait(this);
+            ////}
 
             var instance = _instances[request.Instance];
 
@@ -185,7 +185,7 @@ namespace TKVLeaseManager.Services
         * Communication between leaseManager and leaseManager
         */
 
-        public List<PromiseReply> SendPrepareRequest(int instance, int leaderId)
+        public List<PromiseReply> SendPrepareRequest(int instance, string leaderId)
         {
             var prepareRequest = new PrepareRequest
             {
@@ -222,7 +222,7 @@ namespace TKVLeaseManager.Services
             return promiseResponses;
         }
 
-        public List<AcceptedReply> SendAcceptRequest(int instance, int leaderId, Lease lease)
+        public List<AcceptedReply> SendAcceptRequest(int instance, string leaderId, Lease lease)
         {
             var acceptRequest = new AcceptRequest
             {
@@ -329,7 +329,7 @@ namespace TKVLeaseManager.Services
             Console.WriteLine($"Starting Paxos instance in instance {_currentInstance} for instance {request.Instance}");
 
             // Select new leader
-            var processesSuspected = _processesSuspectedPerInstance[_currentInstance - 1];
+            ////var processesSuspected = _processesSuspectedPerInstance[_currentInstance - 1];
             var leader = int.MaxValue;
             ////foreach (var process in processesSuspected)
             ////{
@@ -337,18 +337,18 @@ namespace TKVLeaseManager.Services
             ////    if (!process.Value && process.Key < leader && _leaseManagerHosts.ContainsKey(process.Key.ToString()))
             ////        leader = process.Key;
             ////}
-            
+
             Console.WriteLine($"Paxos leader is {leader} in instance {_currentInstance} for instance {request.Instance}");
 
             // Save processId for current paxos instance
             // Otherwise it might change in the middle of paxos if a new instance begins
-            var leaderCurrentId = _processId;
+            var leaderCurrentId = _processId.ToString();
             
             // 'leader' comes from config, doesn't account for increase in processId
-            if (_processId % _leaseManagerHosts.Count != leader)
-            {
-                return WaitForPaxos(instance, request);
-            }
+            ////if (_processId % _leaseManagerHosts.Count != leader)
+            ////{
+            ////    return WaitForPaxos(instance, request);
+            ////}
 
             Monitor.Exit(this);
             // Send prepare to all acceptors
@@ -356,6 +356,7 @@ namespace TKVLeaseManager.Services
             
             Monitor.Enter(this);
             // Stop being leader if there is a more recent one
+            //get the last char of _processId
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > _processId)
@@ -390,10 +391,10 @@ namespace TKVLeaseManager.Services
         public LeaseResponse LeaseRequest(LeaseRequest request)
         {
             Monitor.Enter(this);
-            while (_isFrozen)
-            {
-                Monitor.Wait(this);
-            }
+            ////while (_isFrozen)
+            ////{
+            ////    Monitor.Wait(this);
+            ////}
 
             var instance = _instances[request.Instance];
         
