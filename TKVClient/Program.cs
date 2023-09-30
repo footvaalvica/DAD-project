@@ -6,11 +6,7 @@ using System.Diagnostics;
 namespace TKVClient
 {
     using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
-    struct DADINT
-    {
-        public string key { get; set; }
-        public int value { get; set; }
-    }
+    using DADINT = ClientTransactionManagerProto.DADInt;
     internal class Program
     {
         static TransactionManagers? transactionManagers = null;
@@ -70,7 +66,7 @@ namespace TKVClient
             // convert DADINT to DADInt of Proto file and add them to the request
             foreach (DADINT dadint in writes)
             {
-                request.Writes.Add(new DADInt { Key = dadint.key, Value = dadint.value });
+                request.Writes.Add(new DADInt { Key = dadint.Key, Value = dadint.Value });
             }
 
             // send request to transaction manager
@@ -80,7 +76,7 @@ namespace TKVClient
                 if (response.Response != null)
                 {
                     Console.WriteLine("Transaction successful!");
-                    return response.Response.Select(read => new DADINT { key = read.Key, value = read.Value }).ToList();
+                    return response.Response.Select(read => new DADINT { Key = read.Key, Value = read.Value }).ToList();
                 }
                 else
                 {
@@ -120,7 +116,7 @@ namespace TKVClient
                         int.Parse(writePair[1]);
                         Console.WriteLine("DADINT: [" + writePair[0] + ", " + writePair[1] + "]");
                         
-                        writesList.Add(new DADINT { key = writePair[0], value = int.Parse(writePair[1]) });
+                        writesList.Add(new DADINT { Key = writePair[0], Value = int.Parse(writePair[1]) });
 
                     }
                     catch (FormatException)
@@ -132,7 +128,7 @@ namespace TKVClient
                 List<DADINT> dadintsRead = TxSubmit(command[0], reads.ToList(), writesList);
                 foreach (DADINT dadint in dadintsRead)
                 {
-                    Console.WriteLine("DADINT: [" + dadint.key + ", " + dadint.value + "]");
+                    Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]");
                 }
             }
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
