@@ -14,9 +14,9 @@
 P TM1 T http://127.0.0.1:8888
 P TM2 T http://1.2.3.4:10002
 P TM3 T http://1.2.3.4:10003
-P LeaseManager1 L http://1.2.3.5:10004
-P LM2 L http://1.2.3.5:10008
-P lease3 L http://1.2.3.5:10009
+P LeaseManager1 L http://1.2.3.4:10004
+P LM2 L http://1.2.3.4:10008
+P lease3 L http://1.2.3.4:10009
 #
 # A client (indicated by the 'C' process code) does not have a g-RPC URL,
 # but has a path to the client script it is running.

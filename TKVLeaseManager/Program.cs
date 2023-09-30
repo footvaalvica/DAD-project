@@ -24,7 +24,7 @@ namespace TKVLeaseManager
             // A thread will be created at timeToGo and after that, every slotDuration
             timer = new Timer(x =>
             {
-                leaseManagerService.PrepareInstance();
+                leaseManagerService.PrepareSlot();
             }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
         }
 
@@ -32,10 +32,10 @@ namespace TKVLeaseManager
         {
             AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
-            // Command Line Arguments
-            int processId = int.Parse(args[0]);
+            string processId = args[0];
             string host = args[1];
             int port = int.Parse(args[2]);
+            bool debug = args.Length > 3 && args[3].Equals("debug");
 
             // Data from config file
             TKVConfig config = Common.ReadConfig();
@@ -46,21 +46,34 @@ namespace TKVLeaseManager
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts = config.LeaseManagers.ToDictionary(
                 key => key.Id,
                 // !! not sure if this cast is alright? should be tho
-                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Id))
+                value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))
             );
-            List<Dictionary<string, List<String>>> processesSuspectedPerSlot = config.ProcessStates.Select(states =>
+
+            List<ProcessState> statePerSlot = new List<ProcessState>(); // Podia so ir buscar sempre ao dictionary ig
+            foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
-                return states.ToDictionary(key => key.Key, value => value.Value.Suspects);
-            }).ToList();
-            List<bool> processFrozenPerSlot = config.ProcessStates.Select(states => states[processId].Frozen).ToList();
+                if (dict != null)
+                {
+                    dict.TryGetValue(processId, out ProcessState processState);
+                    statePerSlot.Add(processState);
+                }
+                else
+                {
+                    statePerSlot.Add(statePerSlot.Last()); // Podia deixar so a null
+                }
+            }
+            
+            ////var processesSuspectedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
+            ////var processCrashedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
 
-            // A process should not suspect itself (it knows if its frozen or not)
-            for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
-                processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            LeaseManagerService leaseManagerService = new(processId, processFrozenPerSlot, processesSuspectedPerSlot, leaseManagerHosts);
+            ////A process should not suspect itself(it knows if its Crashed or not)
+            ////for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
+            ////    processesSuspectedPerSlot[i][processId.ToString()] = processCrashedPerSlot[i];
 
-            Server server = new()
+            LeaseManagerService leaseManagerService = new(processId, leaseManagerHosts);
+
+            Server server = new Server
             {
                 Services = {
                     Paxos.BindService(new PaxosService(leaseManagerService)),
@@ -81,7 +94,7 @@ namespace TKVLeaseManager
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();
 
-            server.ShutdownAsync().Wait();
+            ////server.ShutdownAsync().Wait();
         }
     }
 }
