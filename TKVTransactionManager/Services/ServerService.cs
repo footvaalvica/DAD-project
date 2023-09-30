@@ -42,7 +42,6 @@ namespace TKVTransactionManager.Services
             //this.processCrashedPerSlot = processCrashedPerSlot;
             //this.processesSuspectedPerSlot = processesSuspectedPerSlot;
 
-            this.balance = 0;
             this.isCrashed = false;
             this.totalSlots = 0;
             this.currentSlot = 0;
@@ -63,6 +62,22 @@ namespace TKVTransactionManager.Services
         public StatusResponse Status(StatusRequest statusRequest)
         {
             return new StatusResponse { Status = true };
+        }
+
+        public TransactionResponse TxSubmit(TransactionRequest transactionRequest)
+        {
+            Console.WriteLine($"Received transaction request: ");
+            Console.WriteLine($"     FROM: {transactionRequest.Id}");
+            foreach (string dadint in transactionRequest.Reads)
+            {
+                Console.WriteLine($"     DADINT2READ: {dadint}");
+            }
+            foreach (DADInt dadint in transactionRequest.Writes)
+            {
+                Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
+            }
+            Console.WriteLine($"Finished processing transaction request...");
+            return new TransactionResponse { };
         }
     }
 }

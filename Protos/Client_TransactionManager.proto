@@ -24,6 +24,6 @@ message StatusResponse {
 }
 
 service Client_TransactionManagerService {
-	rpc Submit(TransactionRequest) returns (TransactionResponse);
+	rpc TxSubmit(TransactionRequest) returns (TransactionResponse);
 	rpc Status(StatusRequest) returns (StatusResponse);
 }

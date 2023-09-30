@@ -2,6 +2,7 @@
 using Utilities;
 using ClientTransactionManagerProto;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace TKVClient
 {
@@ -10,6 +11,7 @@ namespace TKVClient
     internal class Program
     {
         static TransactionManagers? transactionManagers = null;
+        static TKVConfig config;
         static void Wait(string[] command)
         {
             try
@@ -59,20 +61,17 @@ namespace TKVClient
 
         static List<DADINT> TxSubmit(string id, List<String> reads, List<DADINT> writes)
         {
-            TransactionRequest request = new TransactionRequest();
-            request.Id = id;
+            TransactionRequest request = new TransactionRequest { Id = id };
             request.Reads.AddRange(reads);
+            request.Writes.AddRange(writes);
 
-            // convert DADINT to DADInt of Proto file and add them to the request
-            foreach (DADINT dadint in writes)
-            {
-                request.Writes.Add(new DADInt { Key = dadint.Key, Value = dadint.Value });
-            }
+            // TODO: check if transaction manager is alive
+            // If it isn't, change index to next transaction manager
 
             // send request to transaction manager
             try
             {
-                TransactionResponse response = transactionManagers[id].TxSubmit(request); // FIXME
+                TransactionResponse response = transactionManagers[config.Client2TM[id]].TxSubmit(request);
                 if (response.Response != null)
                 {
                     Console.WriteLine("Transaction successful!");
@@ -91,41 +90,50 @@ namespace TKVClient
             return new List<DADINT>();
         }
 
-        static void TransactionRequest(string[] command)
+        static void TransactionRequest(string[] command, string processId)
         {
             if (command.Length == 3)
             {
-                string[] reads = command[1].Split(',', StringSplitOptions.RemoveEmptyEntries);
-                string[] writes = command[2].Split(',', StringSplitOptions.RemoveEmptyEntries);
+                // Remove parenthesis and etc
+                string[] reads = command[1].Substring(1, command[1].Length - 2)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries);
+                reads = reads.Select(read => read.Trim('"')).ToArray();
 
                 foreach (string read in reads)
                 {
                     Console.WriteLine("DADINT: [" + read + "]");
                 }
+
+                Regex rg = new Regex(@"<""([^""]+)"",(\d+)>");
+                MatchCollection matched = rg.Matches(command[2]);
+
                 List<DADINT> writesList = new List<DADINT>();
-                foreach (string write in writes)
+                foreach (Match match in matched)
                 {
-                    try
+                    if (match.Groups.Count % 2 != 1)
                     {
-                        string[] writePair = write.Split(':', StringSplitOptions.RemoveEmptyEntries); // TODO??
-                        if (writePair.Length != 2)
+                        Console.WriteLine("Invalid transaction request.");
+                        continue;
+                    }
+                    for (int i = 1; i < match.Groups.Count; i += 2)
+                    {
+                        string key = match.Groups[i].Value;
+                        string number = match.Groups[i + 1].Value;
+                        try
+                        {
+                            Console.WriteLine("DADINT: [" + key + ", " + number + "]");
+
+                            writesList.Add(new DADINT { Key = key, Value = int.Parse(number) });
+
+                        }
+                        catch (FormatException)
                         {
                             Console.WriteLine("Invalid write pair provided for transaction request.");
-                            return;
                         }
-                        int.Parse(writePair[1]);
-                        Console.WriteLine("DADINT: [" + writePair[0] + ", " + writePair[1] + "]");
-                        
-                        writesList.Add(new DADINT { Key = writePair[0], Value = int.Parse(writePair[1]) });
-
-                    }
-                    catch (FormatException)
-                    {
-                        Console.WriteLine("Invalid write pair provided for transaction request.");
                     }
                 }
 
-                List<DADINT> dadintsRead = TxSubmit(command[0], reads.ToList(), writesList);
+                List<DADINT> dadintsRead = TxSubmit(processId, reads.ToList(), writesList);
                 foreach (DADINT dadint in dadintsRead)
                 {
                     Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]");
@@ -134,7 +142,7 @@ namespace TKVClient
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
         }
 
-        static bool HandleCommand(string command, TransactionManagers transactionManagers)
+        static bool HandleCommand(string command, string processId, TransactionManagers transactionManagers)
         {
             string[] commandArgs = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
@@ -146,13 +154,15 @@ namespace TKVClient
 
             switch (commandArgs[0].ToLower())
             {
+                case "#":
+                    break;
                 case "w":
                     Console.WriteLine("Client set to wait...");
                     Wait(commandArgs);
                     break;
                 case "t":
                     Console.WriteLine("Processing transaction request...");
-                    TransactionRequest(commandArgs);
+                    TransactionRequest(commandArgs, processId);
                     break;
                 case "s":
                     Console.WriteLine("Sending status request...");
@@ -184,7 +194,6 @@ namespace TKVClient
 
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
 
-            TKVConfig config;
             try { config = Common.ReadConfig(); }
             catch (Exception)
             {
@@ -222,7 +231,7 @@ namespace TKVClient
 
             int clientTimestamp = 0;
 
-            foreach (string command in commands) { HandleCommand(command, transactionManagers); }
+            foreach (string command in commands) { HandleCommand(command, processId, transactionManagers); }
 
             Console.WriteLine("Press q to exit.");
             while (Console.ReadKey().Key != ConsoleKey.Q) { };

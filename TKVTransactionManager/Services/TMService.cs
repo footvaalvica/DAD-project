@@ -18,6 +18,11 @@ namespace TKVTransactionManager.Services
         {
             return Task.FromResult(serverService.Status(request));
         }
+
+        public override Task<TransactionResponse> TxSubmit(TransactionRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.TxSubmit(request));
+        }
         // TODO: communication
     }
 }
