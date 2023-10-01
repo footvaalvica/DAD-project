@@ -43,6 +43,7 @@ namespace Utilities
     public struct TKVConfig
     {
         public Dictionary<string, string> Client2TM { get; set; }
+        public Dictionary<string, string> TM2LM { get; set; }
         public List<ProcessInfo> TransactionManagers { get; }
         public List<ProcessInfo> LeaseManagers { get; }
         public int NumberOfProcesses { get; }
@@ -50,9 +51,10 @@ namespace Utilities
 
         public Dictionary<string, ProcessState>[] ProcessStates { get; }
 
-        public TKVConfig(Dictionary<string, string> client2TM, List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<string, ProcessState>[] processStates)
+        public TKVConfig(Dictionary<string, string> client2TM, Dictionary<string, string> TM2LM, List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<string, ProcessState>[] processStates)
         {
             this.Client2TM = client2TM;
+            this.TM2LM = TM2LM;
             this.TransactionManagers = transactionManagers;
             this.LeaseManagers = leaseManagers;
             this.NumberOfProcesses = numberOfProcesses;
@@ -89,6 +91,7 @@ namespace Utilities
             List<ProcessInfo> leaseManagers = new List<ProcessInfo>();
             List<ProcessInfo> servers = new();
             Dictionary<string, string> client2TM = new(); // lets client know which tm to use
+            Dictionary<string, string> tm2LM = new();
             int numberOfSlots = 0;
             int readClients = 0;
 
@@ -172,17 +175,25 @@ namespace Utilities
                         }
                     }
 
-                    Regex rg = new Regex(@"\(([^,]+,[^,]+)\)");
+                    Regex rg = new Regex(@"\(([^,]+,[^)]+)\)");
                     MatchCollection matched = rg.Matches(command);
                     foreach (Match match in matched.Cast<Match>())
                     {
-                        string[] values = match.Value.Split(",");
-                        processStates[slotId - 1].TryGetValue(values[0].Substring(1, values[0].Length-1), out ProcessState state);
-                        state.Suspects.Add(values[1].Substring(0, values[1].Length-1)); // regex not doing what i wanted so ...
+                        string[] values = match.Groups[1].Value.Split(",");
+                        processStates[slotId - 1].TryGetValue(values[0], out ProcessState state);
+                        state.Suspects.Add(values[1]);
                     }
                 }
             }
-            return new TKVConfig(client2TM, transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
+            int key = 0;
+            for (int i=0; i<transactionManagers.Count; i++)
+            {
+                if (key > leaseManagers.Count - 1) { key = 0; }
+                tm2LM.Add(transactionManagers[i].Id, leaseManagers[key++].Id);
+            }
+
+
+            return new TKVConfig(client2TM, tm2LM, transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
         }
     }
 

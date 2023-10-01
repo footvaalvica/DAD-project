@@ -16,7 +16,7 @@ namespace TKVTransactionManager
 
         static private void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
         {
-            TimeSpan timeToGo = TimeSpan.Zero; //  time - DateTime.Now.TimeOfDay;
+            TimeSpan timeToGo = TimeSpan.Zero; //  time - DateTime.Now.TimeOfDay; // TODO: remove before submission
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup.");
@@ -60,9 +60,9 @@ namespace TKVTransactionManager
                 value => new TwoPhaseCommit.TwoPhaseCommitClient(GrpcChannel.ForAddress(value.Url))
             );
             // TransactionM <-> LeaseM
-            Dictionary<string, CompareAndSwap.CompareAndSwapClient> leaseManagers = config.LeaseManagers.ToDictionary(
+            Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers = config.LeaseManagers.ToDictionary(
                 key => key.Id,
-                value => new CompareAndSwap.CompareAndSwapClient(GrpcChannel.ForAddress(value.Url))
+                value => new TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient(GrpcChannel.ForAddress(value.Url))
             );
 
             List<ProcessState> statePerSlot = new List<ProcessState>(); // Podia so ir buscar sempre ao dictionary ig
@@ -79,6 +79,8 @@ namespace TKVTransactionManager
                 }
             }
 
+            string buddy = config.TM2LM[processId];
+
             // TODO: Check if this is correct
             //List<bool> processCrashedPerSlot = config.ProcessStates.Select(states => states[processId].Crashed).ToList();
 
@@ -86,7 +88,7 @@ namespace TKVTransactionManager
             //for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
             //    processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            ServerService serverService = new(processId, transactionManagers, leaseManagers); // processCrashedPerSlot, processesSuspectedPerSlot, 
+            ServerService serverService = new(processId, buddy, transactionManagers, leaseManagers); // processCrashedPerSlot, processesSuspectedPerSlot, 
 
             Server server = new Server
             {

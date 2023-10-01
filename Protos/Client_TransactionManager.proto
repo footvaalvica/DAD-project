@@ -2,10 +2,7 @@ syntax = "proto3";
 
 package Client_TransactionManagerProto;
 
-message DADInt {
-	string key = 1;
-	int32 value = 2;
-}
+import "Transaction.proto";
 
 message TransactionRequest {
 	string id = 1;

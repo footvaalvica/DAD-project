@@ -12,7 +12,7 @@ namespace TKVLeaseManager
         static System.Threading.Timer timer;
         private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
         {
-            TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
+            TimeSpan timeToGo = TimeSpan.Zero; /*time - DateTime.Now.TimeOfDay;*/ // TODO: remove before submission
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup.");
@@ -45,7 +45,6 @@ namespace TKVLeaseManager
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts = config.LeaseManagers.ToDictionary(
                 key => key.Id,
-                // !! not sure if this cast is alright? should be tho
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))
             );
 
@@ -71,7 +70,7 @@ namespace TKVLeaseManager
             ////for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
             ////    processesSuspectedPerSlot[i][processId.ToString()] = processCrashedPerSlot[i];
 
-            LeaseManagerService leaseManagerService = new(processId, leaseManagerHosts);
+            LeaseManagerService leaseManagerService = new(processId, statePerSlot, leaseManagerHosts);
 
             Server server = new Server
             {
@@ -94,7 +93,7 @@ namespace TKVLeaseManager
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();
 
-            ////server.ShutdownAsync().Wait();
+            server.ShutdownAsync().Wait(); // why was this commented out?
         }
     }
 }

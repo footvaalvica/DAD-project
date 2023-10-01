@@ -19,6 +19,7 @@
 	</PackageReference>
 	<ProjectReference Include="..\Utilities\Utilities.csproj" />
 	<Protobuf Include="..\Protos\Client_TransactionManager.proto" GrpcServices="Client" Link="Protos\Client_TransactionManager.proto" />
+	<Protobuf Include="..\Protos\Transaction.proto" GrpcServices="Both" Link="Protos\Transaction.proto" />
   </ItemGroup>
 
 </Project>

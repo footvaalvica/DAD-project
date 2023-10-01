@@ -8,14 +8,16 @@ using System.Diagnostics;
 
 namespace TKVTransactionManager.Services
 {
+    using LeaseManagers = Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient>;
     public class ServerService
     {
         // Config file variables
         private readonly string processId;
         private readonly List<bool> processesCrashedPerSlot;
         private readonly List<Dictionary<int, bool>> processesSuspectedPerSlot;
+        private string buddy; // can change if it goes down
         private readonly Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers;
-        private readonly Dictionary<string, CompareAndSwap.CompareAndSwapClient> leaseManagers; // TODO: fix the service / see if its correct
+        private readonly Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers; // TODO: fix the service / see if its correct
 
         // Paxos variables
         private bool isCrashed;
@@ -27,8 +29,8 @@ namespace TKVTransactionManager.Services
         private decimal balance;
         private bool isCleaning;
         private int currentSequenceNumber;
-        private List<DADInt> transactionManagerDadInts;
-        private List<string> leases;
+        private Dictionary<string, DADInt> transactionManagerDadInts;
+        private List<string> leasesHeld;
         //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
         //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
 
@@ -36,11 +38,13 @@ namespace TKVTransactionManager.Services
             string processId,
             //List<bool> processCrashedPerSlot,
             //List<Dictionary<int, bool>> processesSuspectedPerSlot,
+            string buddy,
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers,
-            Dictionary<string, CompareAndSwap.CompareAndSwapClient> leaseManagers
+            Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers
             )
         {
             this.processId = processId;
+            this.buddy = buddy;
             this.transactionManagers = transactionManagers;
             this.leaseManagers = leaseManagers;
             //this.processCrashedPerSlot = processCrashedPerSlot;
@@ -50,8 +54,8 @@ namespace TKVTransactionManager.Services
             this.totalSlots = 0;
             this.currentSlot = 0;
             this.currentSequenceNumber = 0;
-            this.transactionManagerDadInts = new List<DADInt>();
-            this.leases = new List<string>();
+            this.transactionManagerDadInts = new();
+            this.leasesHeld = new List<string>();
             this.primaryPerSlot = new Dictionary<int, int>();
 
             this.isCleaning = false;
@@ -89,9 +93,9 @@ namespace TKVTransactionManager.Services
                 leasesRequired.Add(dadint.Key);
             }
 
-            foreach (string dadint in leasesRequired)
+            foreach (string dadint in leasesRequired) // leaseheld should be a list of List<string> ?, so if a conflicting lease appears, the entire lease is removed
             {
-                if (!leases.Contains(dadint))
+                if (!leasesHeld.Contains(dadint))
                 {
                     allLeases = false;
                     break;
@@ -101,8 +105,12 @@ namespace TKVTransactionManager.Services
             if (!allLeases)
             {
                 Console.WriteLine($"Requesting leases...");
-                LeaseRequest leaseRequest = new LeaseRequest { Slot = currentSlot, Lease = { id = processId, permissions = leasesRequired } };
-                LeaseResponse leaseResponse = new LeaseResponse(); // ??? leaseManagers[processId].Lease(leaseRequest);
+                Lease lease = new Lease { Id = processId };
+                lease.Permissions.AddRange(leasesRequired);
+                LeaseRequest leaseRequest = new LeaseRequest { Slot = currentSlot, Lease = lease };
+
+                // TODO: check if buddy LM is down, if so, change buddy
+                LeaseResponse leaseResponse = leaseManagers[buddy].Lease(leaseRequest);
                 if (leaseResponse.Status) { allLeases = true; }
                 else { // TODO
                 }
@@ -113,12 +121,21 @@ namespace TKVTransactionManager.Services
                 Console.WriteLine($"Lease granted!");
                 foreach (string dadintKey in transactionRequest.Reads)
                 {
-                    dadIntsRead.Add(transactionManagerDadInts.Find(dadint => dadint.Key.Equals(dadintKey)));
+                    if (transactionManagerDadInts.TryGetValue(dadintKey, out DADInt dadint))
+                        dadIntsRead.Add(dadint);
+                    else
+                    {
+                        Console.WriteLine("Requested read on non-existing DADINT."); // TODO
+                    }
                 }
                 foreach (DADInt dadint in transactionRequest.Writes)
                 {
-                    DADInt dadintToWrite = transactionManagerDadInts.Find(dadint2 => dadint2.Key.Equals(dadint.Key));
-                    dadintToWrite.Value = dadint.Value;
+                    if (transactionManagerDadInts.ContainsKey(dadint.Key))
+                        transactionManagerDadInts[dadint.Key].Value = dadint.Value;
+                    else
+                    {
+                        Console.WriteLine("Requested write on non-existing DADINT."); // TODO
+                    }
                 }
             }
 

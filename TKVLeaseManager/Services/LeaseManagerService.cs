@@ -2,6 +2,7 @@
 using TKVLeaseManager.Domain;
 using TransactionManagerLeaseManagerServiceProto;
 using LeaseManagerLeaseManagerServiceProto;
+using Utilities;
 
 namespace TKVLeaseManager.Services
 {
@@ -16,12 +17,14 @@ namespace TKVLeaseManager.Services
         // Changing variables
         ////private bool _isFrozen;
         private int _currentSlot;
+        private readonly List<ProcessState> _statePerSlot;
         private readonly ConcurrentDictionary<int, SlotData> _slots;
 
         public LeaseManagerService(
             string processId,
             ////List<bool> processFrozenPerSlot,
             ////List<Dictionary<string, List<String>>> processesSuspectedPerSlot,
+            List<ProcessState> statePerSlot,
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts
             )
         {
@@ -33,10 +36,11 @@ namespace TKVLeaseManager.Services
             _currentSlot = 0;
             ////_isFrozen = false;
 
+            _statePerSlot = statePerSlot;
             _slots = new();
             // Initialize slots
-            ////for (var i = 1; i <= processFrozenPerSlot.Count; i++)
-            ////    _slots.TryAdd(i, new(i));
+            for (var i = 1; i <= statePerSlot.Count; i++)
+                _slots.TryAdd(i, new(i));
         }
 
         /*
@@ -398,7 +402,7 @@ namespace TKVLeaseManager.Services
 
             var slot = _slots[request.Slot];
         
-            Console.WriteLine($"Compare and swap request with value {request.Lease} in slot {request.Slot}");
+            Console.WriteLine($"Lease request with value {request.Lease} in slot {request.Slot}");
 
             while (!DoPaxosSlot(request))
             {   

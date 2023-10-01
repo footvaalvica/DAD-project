@@ -33,6 +33,7 @@ namespace Launcher
             if (type.Equals("C"))
             {
                 var script = configArgs[3];
+                Console.WriteLine("Starting client " + id + " with script " + script);
                 return StartProcess(clientPath, id + " " + script);
             }
 

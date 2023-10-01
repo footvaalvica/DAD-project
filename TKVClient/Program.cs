@@ -7,7 +7,6 @@ using System.Text.RegularExpressions;
 namespace TKVClient
 {
     using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
-    using DADINT = ClientTransactionManagerProto.DADInt;
     internal class Program
     {
         static TransactionManagers? transactionManagers = null;
@@ -59,7 +58,7 @@ namespace TKVClient
             return true;
         }
 
-        static List<DADINT> TxSubmit(string id, List<String> reads, List<DADINT> writes)
+        static List<DADInt> TxSubmit(string id, List<String> reads, List<DADInt> writes)
         {
             TransactionRequest request = new TransactionRequest { Id = id };
             request.Reads.AddRange(reads);
@@ -75,7 +74,7 @@ namespace TKVClient
                 if (response.Response != null)
                 {
                     Console.WriteLine("Transaction successful!");
-                    return response.Response.Select(read => new DADINT { Key = read.Key, Value = read.Value }).ToList();
+                    return response.Response.Select(read => new DADInt { Key = read.Key, Value = read.Value }).ToList();
                 }
                 else
                 {
@@ -87,7 +86,7 @@ namespace TKVClient
                 Console.WriteLine(e.Status);
             }   
 
-            return new List<DADINT>();
+            return new List<DADInt>();
         }
 
         static void TransactionRequest(string[] command, string processId)
@@ -107,7 +106,7 @@ namespace TKVClient
                 Regex rg = new Regex(@"<""([^""]+)"",(\d+)>");
                 MatchCollection matched = rg.Matches(command[2]);
 
-                List<DADINT> writesList = new List<DADINT>();
+                List<DADInt> writesList = new List<DADInt>();
                 foreach (Match match in matched)
                 {
                     if (match.Groups.Count % 2 != 1)
@@ -123,7 +122,7 @@ namespace TKVClient
                         {
                             Console.WriteLine("DADINT: [" + key + ", " + number + "]");
 
-                            writesList.Add(new DADINT { Key = key, Value = int.Parse(number) });
+                            writesList.Add(new DADInt { Key = key, Value = int.Parse(number) });
 
                         }
                         catch (FormatException)
@@ -133,8 +132,8 @@ namespace TKVClient
                     }
                 }
 
-                List<DADINT> dadintsRead = TxSubmit(processId, reads.ToList(), writesList);
-                foreach (DADINT dadint in dadintsRead)
+                List<DADInt> dadintsRead = TxSubmit(processId, reads.ToList(), writesList);
+                foreach (DADInt dadint in dadintsRead)
                 {
                     Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]");
                 }
