@@ -28,6 +28,7 @@ namespace TKVTransactionManager.Services
         private bool isCleaning;
         private int currentSequenceNumber;
         private List<DADInt> transactionManagerDadInts;
+        private List<string> leases;
         //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
         //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
 
@@ -50,6 +51,7 @@ namespace TKVTransactionManager.Services
             this.currentSlot = 0;
             this.currentSequenceNumber = 0;
             this.transactionManagerDadInts = new List<DADInt>();
+            this.leases = new List<string>();
             this.primaryPerSlot = new Dictionary<int, int>();
 
             this.isCleaning = false;
@@ -70,6 +72,7 @@ namespace TKVTransactionManager.Services
 
         public TransactionResponse TxSubmit(TransactionRequest transactionRequest)
         {
+            bool allLeases = false;
             List<string> leasesRequired = new List<string>();
             List<DADInt> dadIntsRead = new List<DADInt>();
             Console.WriteLine($"Received transaction request: ");
@@ -88,11 +91,24 @@ namespace TKVTransactionManager.Services
 
             foreach (string dadint in leasesRequired)
             {
-                LeaseRequest leaseRequest = new LeaseRequest { Slot = currentSlot, Lease = { id = processId, permissions = leasesRequired } };
+                if (!leases.Contains(dadint))
+                {
+                    allLeases = false;
+                    break;
+                }
             }
 
-            LeaseResponse leaseResponse = new LeaseResponse(); // ??? leaseManagers[processId].Lease(leaseRequest);
-            if (leaseResponse.Status)
+            if (!allLeases)
+            {
+                Console.WriteLine($"Requesting leases...");
+                LeaseRequest leaseRequest = new LeaseRequest { Slot = currentSlot, Lease = { id = processId, permissions = leasesRequired } };
+                LeaseResponse leaseResponse = new LeaseResponse(); // ??? leaseManagers[processId].Lease(leaseRequest);
+                if (leaseResponse.Status) { allLeases = true; }
+                else { // TODO
+                }
+            }
+            
+            if (allLeases)
             {
                 Console.WriteLine($"Lease granted!");
                 foreach (string dadintKey in transactionRequest.Reads)
