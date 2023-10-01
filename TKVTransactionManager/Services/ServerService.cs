@@ -107,7 +107,7 @@ namespace TKVTransactionManager.Services
                 Console.WriteLine($"Requesting leases...");
                 Lease lease = new Lease { Id = processId };
                 lease.Permissions.AddRange(leasesRequired);
-                LeaseRequest leaseRequest = new LeaseRequest { Slot = currentSlot, Lease = lease };
+                LeaseRequest leaseRequest = new LeaseRequest { Lease = lease };
 
                 // TODO: check if buddy LM is down, if so, change buddy
                 LeaseResponse leaseResponse = leaseManagers[buddy].Lease(leaseRequest);

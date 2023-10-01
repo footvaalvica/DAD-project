@@ -18,6 +18,7 @@ namespace TKVLeaseManager.Services
         ////private bool _isFrozen;
         private int _currentSlot;
         private readonly List<ProcessState> _statePerSlot;
+        // TODO change this to a list
         private readonly ConcurrentDictionary<int, SlotData> _slots;
 
         public LeaseManagerService(
@@ -88,8 +89,11 @@ namespace TKVLeaseManager.Services
             ////    Monitor.Wait(this);
             ////}
 
+            Console.WriteLine($"({request.Slot})    Recevied Prepare({request.LeaderId[^1]})");
+            
             var slot = _slots[request.Slot];
   
+
             if (slot.ReadTimestamp < request.LeaderId[^1])
                 slot.ReadTimestamp = request.LeaderId[^1];
 
@@ -297,7 +301,7 @@ namespace TKVLeaseManager.Services
          * Communication between Bank and leaseManager
          */
 
-        public bool WaitForPaxos(SlotData slot, LeaseRequest request)
+        public bool WaitForPaxos(SlotData slot)
         {
             var success = true;
             while (slot.IsPaxosRunning)
@@ -317,8 +321,10 @@ namespace TKVLeaseManager.Services
         public bool DoPaxosSlot(LeaseRequest request)
         {
             //Monitor.Enter(this);
-            
-            var slot = _slots[request.Slot];
+
+            Console.WriteLine("Hello!!");
+
+            var slot = _slots[_currentSlot];
 
             // If paxos isn't running and a value hasn't been decided, start paxos
             if (!slot.IsPaxosRunning && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }}))
@@ -327,10 +333,10 @@ namespace TKVLeaseManager.Services
             }
             else
             {
-                return WaitForPaxos(slot, request);
+                return WaitForPaxos(slot);
             }
 
-            Console.WriteLine($"Starting Paxos slot in slot {_currentSlot} for slot {request.Slot}");
+            Console.WriteLine($"Starting Paxos slot in slot {_currentSlot} for slot {_currentSlot}");
 
             // Select new leader
             ////var processesSuspected = _processesSuspectedPerSlot[_currentSlot - 1];
@@ -342,7 +348,7 @@ namespace TKVLeaseManager.Services
             ////        leader = process.Key;
             ////}
 
-            Console.WriteLine($"Paxos leader is {leader} in slot {_currentSlot} for slot {request.Slot}");
+            Console.WriteLine($"Paxos leader is {leader} in slot {_currentSlot}");
 
             // Save processId for current paxos slot
             // Otherwise it might change in the middle of paxos if a new slot begins
@@ -356,7 +362,7 @@ namespace TKVLeaseManager.Services
 
             Monitor.Exit(this);
             // Send prepare to all acceptors
-            List<PromiseReply> promiseResponses = SendPrepareRequest(request.Slot, leaderCurrentId);
+            List<PromiseReply> promiseResponses = SendPrepareRequest(_currentSlot, leaderCurrentId);
             
             Monitor.Enter(this);
             // Stop being leader if there is a more recent one
@@ -364,7 +370,7 @@ namespace TKVLeaseManager.Services
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > _processId)
-                    return WaitForPaxos(slot, request);
+                    return WaitForPaxos(slot);
             }
 
             // Get values from promises
@@ -385,36 +391,24 @@ namespace TKVLeaseManager.Services
 
             Monitor.Exit(this);
             // Send accept to all acceptors which will send decide to all learners
-            SendAcceptRequest(request.Slot, leaderCurrentId, valueToPropose);
+            SendAcceptRequest(_currentSlot, leaderCurrentId, valueToPropose);
 
             Monitor.Enter(this);
             // Wait for learners to decide
-            return WaitForPaxos(slot, request);
+            return WaitForPaxos(slot);
         }
 
         public LeaseResponse LeaseRequest(LeaseRequest request)
         {
             Monitor.Enter(this);
-            ////while (_isFrozen)
-            ////{
-            ////    Monitor.Wait(this);
-            ////}
-
-            var slot = _slots[request.Slot];
-        
-            Console.WriteLine($"Lease request with value {request.Lease} in slot {request.Slot}");
-
             while (!DoPaxosSlot(request))
             {   
             }
-            
+
             Monitor.Exit(this);
-
-            Console.WriteLine($"Compare and swap replied with value {slot.DecidedValue} for slot {request.Slot}");
-
             return new()
             {
-                Slot = request.Slot,
+                Slot = _currentSlot,
                 Status = true
             };
         }

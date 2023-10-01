@@ -4,15 +4,24 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TKVTransactionManager", "TKVTransactionManager\TKVTransactionManager.csproj", "{56453E09-6DB9-4E41-80DD-E9636218C66B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{10A8A33D-4E69-4162-B440-B414786A4D11} = {10A8A33D-4E69-4162-B440-B414786A4D11}
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Protos", "Protos\Protos.csproj", "{6741E8B3-E10B-4704-860D-6410895A1034}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TKVClient", "TKVClient\TKVClient.csproj", "{243D1F02-C2A5-44BB-B6CF-34A2CE75103E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TKVLeaseManager", "TKVLeaseManager\TKVLeaseManager.csproj", "{10A8A33D-4E69-4162-B440-B414786A4D11}"
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Launcher", "Launcher\Launcher.csproj", "{987CBFEC-A939-4927-B035-882867E7FEAB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TKVLeaseManager", "TKVLeaseManager\TKVLeaseManager.csproj", "{10A8A33D-4E69-4162-B440-B414786A4D11}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utilities", "Utilities\Utilities.csproj", "{1986C7A2-BC42-4FE2-A41C-9436D4632B5D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Launcher", "Launcher\Launcher.csproj", "{987CBFEC-A939-4927-B035-882867E7FEAB}"
+	ProjectSection(ProjectDependencies) = postProject
+		{243D1F02-C2A5-44BB-B6CF-34A2CE75103E} = {243D1F02-C2A5-44BB-B6CF-34A2CE75103E}
+		{56453E09-6DB9-4E41-80DD-E9636218C66B} = {56453E09-6DB9-4E41-80DD-E9636218C66B}
+		{6741E8B3-E10B-4704-860D-6410895A1034} = {6741E8B3-E10B-4704-860D-6410895A1034}
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Utilities", "Utilities\Utilities.csproj", "{1986C7A2-BC42-4FE2-A41C-9436D4632B5D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

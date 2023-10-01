@@ -5,9 +5,8 @@ package TransactionManager_LeaseManagerServiceProto;
 import "LeaseType.proto";
 
 message LeaseRequest {
-	int32 slot = 1;
-	Lease lease = 2;
-	// int32 number = 3;
+	Lease lease = 1;
+	// int32 number = 2;
 }
 
 message LeaseResponse {

@@ -18,7 +18,7 @@
     <Protobuf Include="..\Protos\LeaseType.proto" GrpcServices="Both" Link="Protos\LeaseType.proto" />
     <Protobuf Include="..\Protos\LeaseManager_LeaseManager.proto" GrpcServices="Both" Link="Protos\LeaseManager_LeaseManager.proto" />
     <Protobuf Include="..\Protos\TransactionManager_LeaseManager.proto" GrpcServices="Server" Link="Protos\TransactionManager_LeaseManager.proto" />
-	<Protobuf Include="..\Protos\Transaction.proto" GrpcServices="Both" Link="Protos\Transaction.proto" />
+	  <Protobuf Include="..\Protos\Transaction.proto" GrpcServices="Both" Link="Protos\Transaction.proto" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 
