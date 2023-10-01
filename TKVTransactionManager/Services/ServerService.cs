@@ -3,6 +3,8 @@ using TransactionManagerLeaseManagerServiceProto;
 using System.Data;
 using System.Globalization;
 using ClientTransactionManagerProto;
+using System.Security;
+using System.Diagnostics;
 
 namespace TKVTransactionManager.Services
 {
@@ -10,7 +12,7 @@ namespace TKVTransactionManager.Services
     {
         // Config file variables
         private readonly string processId;
-        private readonly List<bool> processCrashedPerSlot; // TODO: rename to processe**s**
+        private readonly List<bool> processesCrashedPerSlot;
         private readonly List<Dictionary<int, bool>> processesSuspectedPerSlot;
         private readonly Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers;
         private readonly Dictionary<string, CompareAndSwap.CompareAndSwapClient> leaseManagers; // TODO: fix the service / see if its correct
@@ -25,6 +27,7 @@ namespace TKVTransactionManager.Services
         private decimal balance;
         private bool isCleaning;
         private int currentSequenceNumber;
+        private List<DADInt> transactionManagerDadInts;
         //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
         //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
 
@@ -46,6 +49,7 @@ namespace TKVTransactionManager.Services
             this.totalSlots = 0;
             this.currentSlot = 0;
             this.currentSequenceNumber = 0;
+            this.transactionManagerDadInts = new List<DADInt>();
             this.primaryPerSlot = new Dictionary<int, int>();
 
             this.isCleaning = false;
@@ -66,18 +70,46 @@ namespace TKVTransactionManager.Services
 
         public TransactionResponse TxSubmit(TransactionRequest transactionRequest)
         {
+            List<string> leasesRequired = new List<string>();
+            List<DADInt> dadIntsRead = new List<DADInt>();
             Console.WriteLine($"Received transaction request: ");
             Console.WriteLine($"     FROM: {transactionRequest.Id}");
-            foreach (string dadint in transactionRequest.Reads)
+            foreach (string dadintKey in transactionRequest.Reads)
             {
-                Console.WriteLine($"     DADINT2READ: {dadint}");
+                Console.WriteLine($"     DADINT2READ: {dadintKey}");
+                // add to leasesRequired
+                leasesRequired.Add(dadintKey);
             }
             foreach (DADInt dadint in transactionRequest.Writes)
             {
                 Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
+                leasesRequired.Add(dadint.Key);
             }
+
+            foreach (string dadint in leasesRequired)
+            {
+                LeaseRequest leaseRequest = new LeaseRequest { Slot = currentSlot, Lease = { id = processId, permissions = leasesRequired } };
+            }
+
+            LeaseResponse leaseResponse = new LeaseResponse(); // ??? leaseManagers[processId].Lease(leaseRequest);
+            if (leaseResponse.Status)
+            {
+                Console.WriteLine($"Lease granted!");
+                foreach (string dadintKey in transactionRequest.Reads)
+                {
+                    dadIntsRead.Add(transactionManagerDadInts.Find(dadint => dadint.Key.Equals(dadintKey)));
+                }
+                foreach (DADInt dadint in transactionRequest.Writes)
+                {
+                    DADInt dadintToWrite = transactionManagerDadInts.Find(dadint2 => dadint2.Key.Equals(dadint.Key));
+                    dadintToWrite.Value = dadint.Value;
+                }
+            }
+
             Console.WriteLine($"Finished processing transaction request...");
-            return new TransactionResponse { };
+            TransactionResponse transactionResponse = new TransactionResponse();
+            transactionResponse.Response.AddRange(dadIntsRead);
+            return transactionResponse;
         }
     }
 }
