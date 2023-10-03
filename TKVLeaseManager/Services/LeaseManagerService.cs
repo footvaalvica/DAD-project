@@ -407,8 +407,8 @@ namespace TKVLeaseManager.Services
             {
                 if (response.ReadTimestamp > _processId)
                 {
-                    return WaitForPaxos(slot);
                     Monitor.Exit(this);
+                    return WaitForPaxos(slot);
                 }
             }
 
@@ -427,7 +427,7 @@ namespace TKVLeaseManager.Services
             // If acceptors have no value, send own value
             if (valueToPropose.Equals(new() { Id = "-1", Permissions = { } }))
                 valueToPropose = request.Lease;
-
+            
             Monitor.Exit(this);
             // Send accept to all acceptors which will send decide to all learners
             SendAcceptRequest(_currentSlot, leaderCurrentId, valueToPropose);
@@ -439,17 +439,18 @@ namespace TKVLeaseManager.Services
         public LeaseResponse LeaseRequest(LeaseRequest request)
         {
             Monitor.Enter(this);
+
+            SlotData slot = _slots[_currentSlot]; // TODO
+
             while (!DoPaxosSlot(request))
-            {   
+            {
             }
 
             Monitor.Exit(this);
-
-            Console.WriteLine("replied and finished it!");
             return new()
             {
-                Slot = _currentSlot,
-                Status = true // TODO
+                Slot = slot.Slot,
+                Status = slot.DecidedValue.Equals(request.Lease)
             };
         }
     }
