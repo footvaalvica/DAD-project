@@ -343,12 +343,13 @@ namespace TKVLeaseManager.Services
             }
 
             // 1: who's the leader?
-            // Suspected (bool) VS Suspects (list of strings)
-            // 
             var leader = int.MaxValue;
-            for (int i=0; i < _statePerSlot[_currentSlot-1].Count; i++)
+            for (int i = 0; i < _statePerSlot[_currentSlot - 1].Count; i++)
             {
-                if (_statePerSlot[_currentSlot - 1][i].Crashed == false) // already getting the first lowest id
+                // If process is normal and not suspected by it's successor
+                // A B C : B only becomes leader if C doesn't suspect it and all before are crashed
+                if (_statePerSlot[_currentSlot - 1][i].Crashed == false &&
+                    !_statePerSlot[_currentSlot - 1][i + 1].Suspects.Contains(_processBook[i]))
                 {
                     leader = i;
                     break;
