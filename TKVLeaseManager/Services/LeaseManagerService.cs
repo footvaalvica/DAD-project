@@ -3,6 +3,7 @@ using TKVLeaseManager.Domain;
 using TransactionManagerLeaseManagerServiceProto;
 using LeaseManagerLeaseManagerServiceProto;
 using Utilities;
+using System.Runtime.Serialization.Formatters;
 
 namespace TKVLeaseManager.Services
 {
@@ -10,6 +11,7 @@ namespace TKVLeaseManager.Services
     {
         // Config file variables
         private int _processId;
+        private string _processName;
         ////private readonly List<bool> _processFrozenPerSlot;
         private readonly Dictionary<string, Paxos.PaxosClient> _leaseManagerHosts;
         ////private readonly List<Dictionary<string, List<String>>> _processesSuspectedPerSlot;
@@ -17,19 +19,24 @@ namespace TKVLeaseManager.Services
         // Changing variables
         ////private bool _isFrozen;
         private int _currentSlot;
-        private readonly List<ProcessState> _statePerSlot;
+        private readonly List<List<ProcessState>> _statePerSlot;
+        private readonly List<string> _processBook;
         // TODO change this to a list
         private readonly ConcurrentDictionary<int, SlotData> _slots;
+        private string? _leader = null; // TODO
 
         public LeaseManagerService(
-            string processId,
+            int processId,
+            string processName,
             ////List<bool> processFrozenPerSlot,
             ////List<Dictionary<string, List<String>>> processesSuspectedPerSlot,
-            List<ProcessState> statePerSlot,
+            List<string> processBook,
+            List<List<ProcessState>> statePerSlot,
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts
             )
         {
-            _processId = processId[^1];
+            _processName = processName;
+            _processId = processId;
             _leaseManagerHosts = leaseManagerHosts;
             ////_processFrozenPerSlot = processFrozenPerSlot;
             ////_processesSuspectedPerSlot = processesSuspectedPerSlot;
@@ -37,6 +44,7 @@ namespace TKVLeaseManager.Services
             _currentSlot = 0;
             ////_isFrozen = false;
 
+            _processBook = processBook;
             _statePerSlot = statePerSlot;
             _slots = new();
             // Initialize slots
@@ -69,7 +77,7 @@ namespace TKVLeaseManager.Services
 
             _currentSlot += 1;
 
-            // Every slot increase processId to allow progress when the system configuration changes
+            // Every slot increase processId to allow progress when the system configuration changes // TODO????
             _processId += _leaseManagerHosts.Count;
 
             Console.WriteLine("Ending preparation -----------------------");
@@ -89,13 +97,12 @@ namespace TKVLeaseManager.Services
             ////    Monitor.Wait(this);
             ////}
 
-            Console.WriteLine($"({request.Slot})    Recevied Prepare({request.LeaderId[^1]})");
-            
+            Console.WriteLine($"({request.Slot})    Received Prepare({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]})");
+
             var slot = _slots[request.Slot];
   
-
-            if (slot.ReadTimestamp < request.LeaderId[^1])
-                slot.ReadTimestamp = request.LeaderId[^1];
+            if (slot.ReadTimestamp < request.LeaderId)
+                slot.ReadTimestamp = request.LeaderId;
 
             var reply = new PromiseReply
             {
@@ -104,7 +111,7 @@ namespace TKVLeaseManager.Services
                 Lease = slot.WrittenValue,
             };
 
-            Console.WriteLine($"({request.Slot})    Received Prepare({request.LeaderId[^1]})");
+            Console.WriteLine($"({request.Slot})    Received Prepare({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]})");
             Console.WriteLine($"({request.Slot})        Answered Promise({slot.ReadTimestamp},{slot.WrittenValue})");
 
             Monitor.Exit(this);
@@ -113,7 +120,9 @@ namespace TKVLeaseManager.Services
 
         public AcceptedReply AcceptPaxos(AcceptRequest request)
         {
+            Console.WriteLine("TEST ABC AAAAAAAA");
             Monitor.Enter(this);
+            Console.WriteLine("TEST ABC ZERO");
             ////while (_isFrozen)
             ////{
             ////    Monitor.Wait(this);
@@ -121,11 +130,13 @@ namespace TKVLeaseManager.Services
 
             var slot = _slots[request.Slot];
 
-            Console.WriteLine($"({request.Slot})    Recevied Accept({request.LeaderId[^1]}, {request.Lease})");
+            Console.WriteLine("TEST ABC PRIMEIRO");
+            Console.WriteLine($"({request.Slot})    Received Accept({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]}, {request.Lease})");
+            Console.WriteLine("TEST ABC SEGUNDO");
 
-            if (slot.ReadTimestamp == request.LeaderId[^1])
+            if (slot.ReadTimestamp == request.LeaderId)
             {
-                slot.WriteTimestamp = request.LeaderId[^1];
+                slot.WriteTimestamp = request.LeaderId;
                 slot.WrittenValue = request.Lease;
 
                 // Acceptors send the information to Learners
@@ -193,7 +204,7 @@ namespace TKVLeaseManager.Services
         * Communication between leaseManager and leaseManager
         */
 
-        public List<PromiseReply> SendPrepareRequest(int slot, string leaderId)
+        public List<PromiseReply> SendPrepareRequest(int slot, int leaderId)
         {
             var prepareRequest = new PrepareRequest
             {
@@ -201,13 +212,14 @@ namespace TKVLeaseManager.Services
                 LeaderId = leaderId
             };
 
-            Console.WriteLine($"({slot}) Sending Prepare({leaderId})");
+            Console.WriteLine($"({slot}) Sending Prepare({leaderId % _leaseManagerHosts.Count})");
 
             List<PromiseReply> promiseResponses = new();
 
             List<Task> tasks = new();
             foreach (var host in _leaseManagerHosts)
             {
+                if (host.Key == _processBook[leaderId % _leaseManagerHosts.Count]) continue; // TODO?
                 var t = Task.Run(() =>
                 {
                     try
@@ -222,6 +234,7 @@ namespace TKVLeaseManager.Services
                     return Task.CompletedTask;
                 });
                 tasks.Add(t);
+                Console.WriteLine("Sent prepare request");
             }
 
             for (var i = 0; i < _leaseManagerHosts.Count / 2 + 1; i++)
@@ -230,7 +243,7 @@ namespace TKVLeaseManager.Services
             return promiseResponses;
         }
 
-        public List<AcceptedReply> SendAcceptRequest(int slot, string leaderId, Lease lease)
+        public List<AcceptedReply> SendAcceptRequest(int slot, int leaderId, Lease lease)
         {
             var acceptRequest = new AcceptRequest
             {
@@ -239,12 +252,14 @@ namespace TKVLeaseManager.Services
                 Lease = lease
             };
             
-            Console.WriteLine($"({slot}) Sending Accept({leaderId},{lease})");
+            Console.WriteLine($"({slot}) Sending Accept({leaderId % _leaseManagerHosts.Count},{lease})");
 
             var acceptResponses = new List<AcceptedReply>();
 
-            var tasks = _leaseManagerHosts.Select(host => Task.Run(() =>
+            var tasks = _leaseManagerHosts.Where(host => host.Key != _processBook[leaderId % _leaseManagerHosts.Count])
+                .Select(host => Task.Run(() =>
                 {
+                    Console.WriteLine("Sending accept request");
                     try
                     {
                         var acceptedReply = host.Value.Accept(acceptRequest);
@@ -259,6 +274,7 @@ namespace TKVLeaseManager.Services
                 }))
                 .ToList();
 
+            Console.WriteLine("Waiting for majority accepts");
             // Wait for a majority of responses
             for (var i = 0; i < _leaseManagerHosts.Count / 2 + 1; i++)
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
@@ -310,7 +326,7 @@ namespace TKVLeaseManager.Services
 
                 // Slot ended without reaching consensus
                 // Do paxos again with another configuration
-                if (_currentSlot <= slot.Slot || !slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }})) continue;
+                if (_currentSlot > slot.Slot && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }})) continue;
                 Console.WriteLine($"Slot {slot.Slot} ended without consensus, starting a new paxos slot in slot {_currentSlot}.");
                 success = false;
                 break;
@@ -320,11 +336,35 @@ namespace TKVLeaseManager.Services
 
         public bool DoPaxosSlot(LeaseRequest request)
         {
-            //Monitor.Enter(this);
-
-            Console.WriteLine("Hello!!");
+            Monitor.Enter(this);
 
             var slot = _slots[_currentSlot];
+
+            // 1: who's the leader?
+            // Suspected (bool) VS Suspects (list of strings)
+            // 
+            var leader = int.MaxValue;
+            for (int i=0; i < _statePerSlot[_currentSlot-1].Count; i++)
+            {
+                if (_statePerSlot[_currentSlot - 1][i].Crashed == false) // already getting the first lowest id
+                {
+                    leader = i;
+                    break;
+                }
+            }
+
+            if (leader == int.MaxValue)
+            {
+                Console.WriteLine("No leader found"); // Should never happen
+                return false;
+            }
+
+            // 2: is the leader me?
+            if (_processId % _leaseManagerHosts.Count != leader)
+            {
+                Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
+                return WaitForPaxos(slot);
+            }
 
             // If paxos isn't running and a value hasn't been decided, start paxos
             if (!slot.IsPaxosRunning && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }}))
@@ -333,14 +373,15 @@ namespace TKVLeaseManager.Services
             }
             else
             {
-                return WaitForPaxos(slot);
+                return WaitForPaxos(slot); // shouldn't happen? why would leader wait
             }
 
             Console.WriteLine($"Starting Paxos slot in slot {_currentSlot} for slot {_currentSlot}");
 
             // Select new leader
             ////var processesSuspected = _processesSuspectedPerSlot[_currentSlot - 1];
-            var leader = int.MaxValue;
+            //var leader = int.MaxValue;
+
             ////foreach (var process in processesSuspected)
             ////{
             ////    // leaseManager process that is not suspected and has the lowest id
@@ -352,7 +393,7 @@ namespace TKVLeaseManager.Services
 
             // Save processId for current paxos slot
             // Otherwise it might change in the middle of paxos if a new slot begins
-            var leaderCurrentId = _processId.ToString();
+            var leaderCurrentId = _processId;
             
             // 'leader' comes from config, doesn't account for increase in processId
             ////if (_processId % _leaseManagerHosts.Count != leader)
@@ -409,7 +450,7 @@ namespace TKVLeaseManager.Services
             return new()
             {
                 Slot = _currentSlot,
-                Status = true
+                Status = true // TODO
             };
         }
     }

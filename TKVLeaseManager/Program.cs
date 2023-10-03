@@ -48,20 +48,20 @@ namespace TKVLeaseManager
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))
             );
 
-            List<ProcessState> statePerSlot = new List<ProcessState>(); // Podia so ir buscar sempre ao dictionary ig
+            List<List<ProcessState>> statePerSlot = new(); // Lista de states de todos os leaseManagers por slot
             foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
                 if (dict != null)
                 {
-                    dict.TryGetValue(processId, out ProcessState processState);
-                    statePerSlot.Add(processState);
+                    // Get only ProcessState that are contained in config.LeaseManagers
+                    statePerSlot.Add(dict.Where(x => leaseManagerHosts.ContainsKey(x.Key)).Select(x => x.Value).ToList());
                 }
                 else
                 {
                     statePerSlot.Add(statePerSlot.Last()); // Podia deixar so a null
                 }
             }
-            
+
             ////var processesSuspectedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
             ////var processCrashedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
 
@@ -70,7 +70,9 @@ namespace TKVLeaseManager
             ////for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
             ////    processesSuspectedPerSlot[i][processId.ToString()] = processCrashedPerSlot[i];
 
-            LeaseManagerService leaseManagerService = new(processId, statePerSlot, leaseManagerHosts);
+            int processIndex = config.LeaseManagers.FindIndex(x => x.Id == processId);
+            List<string> processBook = config.LeaseManagers.Select(x => x.Id).ToList();
+            LeaseManagerService leaseManagerService = new(processIndex, processId, processBook, statePerSlot, leaseManagerHosts);
 
             Server server = new Server
             {

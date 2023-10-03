@@ -79,8 +79,6 @@ namespace TKVTransactionManager
                 }
             }
 
-            string buddy = config.TM2LM[processId];
-
             // TODO: Check if this is correct
             //List<bool> processCrashedPerSlot = config.ProcessStates.Select(states => states[processId].Crashed).ToList();
 
@@ -88,7 +86,7 @@ namespace TKVTransactionManager
             //for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
             //    processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            ServerService serverService = new(processId, buddy, transactionManagers, leaseManagers); // processCrashedPerSlot, processesSuspectedPerSlot, 
+            ServerService serverService = new(processId, transactionManagers, leaseManagers); // processCrashedPerSlot, processesSuspectedPerSlot, 
 
             Server server = new Server
             {

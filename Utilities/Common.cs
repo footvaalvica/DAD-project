@@ -42,8 +42,7 @@ namespace Utilities
 
     public struct TKVConfig
     {
-        public Dictionary<string, string> Client2TM { get; set; }
-        public Dictionary<string, string> TM2LM { get; set; }
+        public List<string> Clients { get; set; }
         public List<ProcessInfo> TransactionManagers { get; }
         public List<ProcessInfo> LeaseManagers { get; }
         public int NumberOfProcesses { get; }
@@ -51,10 +50,9 @@ namespace Utilities
 
         public Dictionary<string, ProcessState>[] ProcessStates { get; }
 
-        public TKVConfig(Dictionary<string, string> client2TM, Dictionary<string, string> TM2LM, List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<string, ProcessState>[] processStates)
+        public TKVConfig(List<string> clients, List<ProcessInfo> transactionManagers, List<ProcessInfo> leaseManagers, int numberOfProcesses, int slotDuration, TimeSpan startTime, Dictionary<string, ProcessState>[] processStates)
         {
-            this.Client2TM = client2TM;
-            this.TM2LM = TM2LM;
+            this.Clients = clients;
             this.TransactionManagers = transactionManagers;
             this.LeaseManagers = leaseManagers;
             this.NumberOfProcesses = numberOfProcesses;
@@ -90,26 +88,30 @@ namespace Utilities
             List<ProcessInfo> transactionManagers = new List<ProcessInfo>();
             List<ProcessInfo> leaseManagers = new List<ProcessInfo>();
             List<ProcessInfo> servers = new();
-            Dictionary<string, string> client2TM = new(); // lets client know which tm to use
-            Dictionary<string, string> tm2LM = new();
+            List<string> clients = new();
             int numberOfSlots = 0;
-            int readClients = 0;
 
             foreach (string command in commands)
             {
                 string[] args = command.Split(" ");
 
-                if (args[0].Equals("P") && !args[2].Equals("C"))
+                if (args[0].Equals("P"))
                 {
                     string processId = args[1];
-                    ProcessInfo processInfo = new ProcessInfo(processId, args[2], args[3]);
+                    ProcessInfo processInfo;
                     switch (args[2])
                     {
+                        case "C":
+                            processInfo = new ProcessInfo(processId, args[2]);
+                            clients.Add(processId);
+                            break;
                         case "T":
+                            processInfo = new ProcessInfo(processId, args[2], args[3]);
                             transactionManagers.Add(processInfo);
                             servers.Add(processInfo);
                             break;
                         case "L":
+                            processInfo = new ProcessInfo(processId, args[2], args[3]);
                             leaseManagers.Add(processInfo);
                             servers.Add(processInfo);
                             break;
@@ -117,17 +119,6 @@ namespace Utilities
                             Console.WriteLine("Invalid process type.");
                             break;
                     }
-                }
-
-                else if (args[0].Equals("P")) // client
-                {
-                    string processId = args[1];
-                    ProcessInfo processInfo = new ProcessInfo(processId, args[2]);
-                    if (readClients == transactionManagers.Count)
-                    {
-                        readClients = 0; // round-robin
-                    }
-                    client2TM.Add(processId, transactionManagers[readClients++].Id);
                 }
 
                 else if (args[0].Equals("T"))
@@ -185,15 +176,7 @@ namespace Utilities
                     }
                 }
             }
-            int key = 0;
-            for (int i=0; i<transactionManagers.Count; i++)
-            {
-                if (key > leaseManagers.Count - 1) { key = 0; }
-                tm2LM.Add(transactionManagers[i].Id, leaseManagers[key++].Id);
-            }
-
-
-            return new TKVConfig(client2TM, tm2LM, transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
+            return new TKVConfig(clients, transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
         }
     }
 

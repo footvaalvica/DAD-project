@@ -67,10 +67,13 @@ namespace TKVClient
             // TODO: check if transaction manager is alive
             // If it isn't, change index to next transaction manager
 
+            int indexTM = config.Clients.IndexOf(id) % transactionManagers.Count;
+            string tm = config.TransactionManagers[indexTM].Id;
+
             // send request to transaction manager
             try
             {
-                TransactionResponse response = transactionManagers[config.Client2TM[id]].TxSubmit(request);
+                TransactionResponse response = transactionManagers[tm].TxSubmit(request);
                 if (response.Response != null)
                 {
                     Console.WriteLine("Transaction successful!");
@@ -223,10 +226,10 @@ namespace TKVClient
             }
 
             // Wait for slots to start
-            if (DateTime.Now.TimeOfDay < startTime)
-            {
-                System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
-            }
+            //if (DateTime.Now.TimeOfDay < startTime) // TODO: change before submission
+            //{
+            //    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
+            //}
 
             int clientTimestamp = 0;
 

@@ -5,6 +5,7 @@ using System.Globalization;
 using ClientTransactionManagerProto;
 using System.Security;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace TKVTransactionManager.Services
 {
@@ -15,7 +16,6 @@ namespace TKVTransactionManager.Services
         private readonly string processId;
         private readonly List<bool> processesCrashedPerSlot;
         private readonly List<Dictionary<int, bool>> processesSuspectedPerSlot;
-        private string buddy; // can change if it goes down
         private readonly Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers;
         private readonly Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers; // TODO: fix the service / see if its correct
 
@@ -38,13 +38,11 @@ namespace TKVTransactionManager.Services
             string processId,
             //List<bool> processCrashedPerSlot,
             //List<Dictionary<int, bool>> processesSuspectedPerSlot,
-            string buddy,
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers,
             Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers
             )
         {
             this.processId = processId;
-            this.buddy = buddy;
             this.transactionManagers = transactionManagers;
             this.leaseManagers = leaseManagers;
             //this.processCrashedPerSlot = processCrashedPerSlot;
@@ -108,9 +106,27 @@ namespace TKVTransactionManager.Services
                 Lease lease = new Lease { Id = processId };
                 lease.Permissions.AddRange(leasesRequired);
                 LeaseRequest leaseRequest = new LeaseRequest { Lease = lease };
+                LeaseResponse leaseResponse = null;
 
-                // TODO: check if buddy LM is down, if so, change buddy
-                LeaseResponse leaseResponse = leaseManagers[buddy].Lease(leaseRequest);
+                List<Task> tasks = new List<Task>();
+                foreach (var host in this.leaseManagers)
+                {
+                    Task t = Task.Run(() =>
+                    {
+                        try
+                        {
+                            leaseResponse = leaseManagers[host.Key].Lease(leaseRequest);
+                        }
+                        catch (Grpc.Core.RpcException e)
+                        {
+                            Console.WriteLine(e.Status);
+                        }
+                        return Task.CompletedTask;
+                    });
+                    tasks.Add(t);
+                }
+                Task.WaitAny(tasks.ToArray());
+                
                 if (leaseResponse.Status) { allLeases = true; }
                 else { // TODO
                 }
