@@ -273,8 +273,11 @@ namespace TKVLeaseManager.Services
             Console.WriteLine("Waiting for majority accepts");
             // Wait for a majority of responses
             for (var i = 0; i < _leaseManagerHosts.Count / 2 + 1; i++)
+            {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+            }
 
+            Console.WriteLine("Got it");
             return acceptResponses;
         }
 
@@ -307,20 +310,14 @@ namespace TKVLeaseManager.Services
 
             // Don't need to wait for majority
         }
-
-        /*
-         * Compare And Swap Service (Server) Implementation
-         * Communication between Bank and leaseManager
-         */
-
+        
         public bool WaitForPaxos(SlotData slot)
         {
             var success = true;
+            Monitor.Wait(this);
             Console.WriteLine($"Paxos Running?: {(slot.IsPaxosRunning ? "true" : "false")}");
             while (slot.IsPaxosRunning)
             {
-                Monitor.Wait(this);
-
                 // Slot ended without reaching consensus
                 // Do paxos again with another configuration
                 Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(slot.DecidedValue.Equals(new() { Id = "-1", Permissions = { } }) ? "true" : "false")})");
@@ -329,6 +326,7 @@ namespace TKVLeaseManager.Services
                 success = false;
                 break;
             }
+            Console.WriteLine("Paxos was sucessful!: + " + success);
             return success;
         }
 
