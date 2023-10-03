@@ -30,7 +30,7 @@ namespace TKVTransactionManager.Services
         private bool isCleaning;
         private int currentSequenceNumber;
         private Dictionary<string, DADInt> transactionManagerDadInts;
-        private List<string> leasesHeld;
+        private List<Lease> leasesHeld;
         //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
         //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
 
@@ -53,7 +53,7 @@ namespace TKVTransactionManager.Services
             this.currentSlot = 0;
             this.currentSequenceNumber = 0;
             this.transactionManagerDadInts = new();
-            this.leasesHeld = new List<string>();
+            this.leasesHeld = new List<Lease>();
             this.primaryPerSlot = new Dictionary<int, int>();
 
             this.isCleaning = false;
@@ -74,7 +74,6 @@ namespace TKVTransactionManager.Services
 
         public TransactionResponse TxSubmit(TransactionRequest transactionRequest)
         {
-            bool allLeases = false;
             List<string> leasesRequired = new List<string>();
             List<DADInt> dadIntsRead = new List<DADInt>();
             Console.WriteLine($"Received transaction request: ");
@@ -91,13 +90,22 @@ namespace TKVTransactionManager.Services
                 leasesRequired.Add(dadint.Key);
             }
 
-            foreach (string dadint in leasesRequired) // leaseheld should be a list of List<string> ?, so if a conflicting lease appears, the entire lease is removed
+            bool allLeases = true;
+            bool found;
+            foreach (string dadint in leasesRequired)
             {
-                if (!leasesHeld.Contains(dadint))
+                found = false;
+                foreach (Lease lease in leasesHeld)
                 {
-                    allLeases = false;
-                    break;
+                    if (lease.Permissions.Contains(dadint))
+                    {
+                        found = true;
+                        break;
+                    }
                 }
+                if (!found)
+                    allLeases = false;
+                break;
             }
 
             if (!allLeases)
@@ -127,8 +135,14 @@ namespace TKVTransactionManager.Services
                 }
                 Task.WaitAny(tasks.ToArray());
                 
-                if (leaseResponse.Status) { allLeases = true; }
-                else { // TODO
+                if (leaseResponse.Status)
+                { 
+                    allLeases = true; 
+                    leasesHeld.Add(lease);
+                }
+                else 
+                {
+                    Console.WriteLine("Failed to acquire leases!"); // TODO
                 }
             }
             
