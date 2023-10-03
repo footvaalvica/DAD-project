@@ -313,6 +313,7 @@ namespace TKVLeaseManager.Services
         
         public bool WaitForPaxos(SlotData slot)
         {
+            Monitor.Enter(this);
             var success = true;
             Monitor.Wait(this);
             Console.WriteLine($"Paxos Running?: {(slot.IsPaxosRunning ? "true" : "false")}");
@@ -327,6 +328,7 @@ namespace TKVLeaseManager.Services
                 break;
             }
             Console.WriteLine("Paxos was sucessful!: + " + success);
+            Monitor.Exit(this);
             return success;
         }
 
@@ -340,6 +342,11 @@ namespace TKVLeaseManager.Services
             if (!slot.IsPaxosRunning && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = { } }))
             {
                 slot.IsPaxosRunning = true;
+            } else if (!slot.IsPaxosRunning)
+            {
+                Console.WriteLine("Paxos is not running and a value has been decided");
+                Monitor.Exit(this);
+                return true;
             }
 
             // 1: who's the leader?
@@ -442,9 +449,13 @@ namespace TKVLeaseManager.Services
 
             SlotData slot = _slots[_currentSlot]; // TODO
 
-            while (!DoPaxosSlot(request))
-            {
-            }
+            DoPaxosSlot(request);
+
+            // if this is buggy, line used to be
+            ////while (!DoPaxosSlot(request))
+            ////{
+            ////}
+
 
             Monitor.Exit(this);
             return new()
