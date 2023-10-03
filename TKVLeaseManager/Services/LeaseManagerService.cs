@@ -359,6 +359,7 @@ namespace TKVLeaseManager.Services
             if (leader == int.MaxValue)
             {
                 Console.WriteLine("No leader found"); // Should never happen
+                Monitor.Exit(this);
                 return false;
             }
 
@@ -366,6 +367,7 @@ namespace TKVLeaseManager.Services
             if (_processId % _leaseManagerHosts.Count != leader)
             {
                 Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
+                Monitor.Exit(this);
                 return WaitForPaxos(slot);
             }
 
@@ -404,7 +406,10 @@ namespace TKVLeaseManager.Services
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > _processId)
+                {
                     return WaitForPaxos(slot);
+                    Monitor.Exit(this);
+                }
             }
 
             // Get values from promises
@@ -427,7 +432,6 @@ namespace TKVLeaseManager.Services
             // Send accept to all acceptors which will send decide to all learners
             SendAcceptRequest(_currentSlot, leaderCurrentId, valueToPropose);
 
-            Monitor.Enter(this);
             // Wait for learners to decide
             return WaitForPaxos(slot);
         }
@@ -440,6 +444,8 @@ namespace TKVLeaseManager.Services
             }
 
             Monitor.Exit(this);
+
+            Console.WriteLine("replied and finished it!");
             return new()
             {
                 Slot = _currentSlot,
