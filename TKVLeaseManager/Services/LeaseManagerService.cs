@@ -120,9 +120,7 @@ namespace TKVLeaseManager.Services
 
         public AcceptedReply AcceptPaxos(AcceptRequest request)
         {
-            Console.WriteLine("TEST ABC AAAAAAAA");
             Monitor.Enter(this);
-            Console.WriteLine("TEST ABC ZERO");
             ////while (_isFrozen)
             ////{
             ////    Monitor.Wait(this);
@@ -130,9 +128,7 @@ namespace TKVLeaseManager.Services
 
             var slot = _slots[request.Slot];
 
-            Console.WriteLine("TEST ABC PRIMEIRO");
             Console.WriteLine($"({request.Slot})    Received Accept({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]}, {request.Lease})");
-            Console.WriteLine("TEST ABC SEGUNDO");
 
             if (slot.ReadTimestamp == request.LeaderId)
             {
@@ -166,7 +162,7 @@ namespace TKVLeaseManager.Services
 
             var slot = _slots[request.Slot];
 
-            Console.WriteLine($"({request.Slot})    Recevied Decide({request.WriteTimestamp},{request.Lease})");
+            Console.WriteLine($"({request.Slot})    Received Decide({request.WriteTimestamp},{request.Lease})");
 
             // Learners keep track of all decided values to check for a majority
             slot.DecidedReceived.Add((request.WriteTimestamp, request.Lease));
@@ -320,13 +316,15 @@ namespace TKVLeaseManager.Services
         public bool WaitForPaxos(SlotData slot)
         {
             var success = true;
+            Console.WriteLine($"Paxos Running?: {(slot.IsPaxosRunning ? "true" : "false")}");
             while (slot.IsPaxosRunning)
             {
                 Monitor.Wait(this);
 
                 // Slot ended without reaching consensus
                 // Do paxos again with another configuration
-                if (_currentSlot > slot.Slot && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }})) continue;
+                Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(slot.DecidedValue.Equals(new() { Id = "-1", Permissions = { } }) ? "true" : "false")})");
+                if (_currentSlot <= slot.Slot && !slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }})) continue;
                 Console.WriteLine($"Slot {slot.Slot} ended without consensus, starting a new paxos slot in slot {_currentSlot}.");
                 success = false;
                 break;
@@ -339,6 +337,12 @@ namespace TKVLeaseManager.Services
             Monitor.Enter(this);
 
             var slot = _slots[_currentSlot];
+
+            // If paxos isn't running and a value hasn't been decided, start paxos
+            if (!slot.IsPaxosRunning && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = { } }))
+            {
+                slot.IsPaxosRunning = true;
+            }
 
             // 1: who's the leader?
             // Suspected (bool) VS Suspects (list of strings)
@@ -364,16 +368,6 @@ namespace TKVLeaseManager.Services
             {
                 Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
                 return WaitForPaxos(slot);
-            }
-
-            // If paxos isn't running and a value hasn't been decided, start paxos
-            if (!slot.IsPaxosRunning && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }}))
-            {   
-                slot.IsPaxosRunning = true;
-            }
-            else
-            {
-                return WaitForPaxos(slot); // shouldn't happen? why would leader wait
             }
 
             Console.WriteLine($"Starting Paxos slot in slot {_currentSlot} for slot {_currentSlot}");
