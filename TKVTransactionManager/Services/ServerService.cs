@@ -6,6 +6,7 @@ using ClientTransactionManagerProto;
 using System.Security;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using Google.Protobuf.WellKnownTypes;
 
 namespace TKVTransactionManager.Services
 {
@@ -48,15 +49,15 @@ namespace TKVTransactionManager.Services
             //this.processCrashedPerSlot = processCrashedPerSlot;
             //this.processesSuspectedPerSlot = processesSuspectedPerSlot;
 
-            this.isCrashed = false;
-            this.totalSlots = 0;
-            this.currentSlot = 0;
-            this.currentSequenceNumber = 0;
-            this.transactionManagerDadInts = new();
-            this.leasesHeld = new List<Lease>();
-            this.primaryPerSlot = new Dictionary<int, int>();
+            isCrashed = false;
+            totalSlots = 0;
+            currentSlot = 0;
+            currentSequenceNumber = 0;
+            transactionManagerDadInts = new Dictionary<string, DADInt>();
+            leasesHeld = new List<Lease>();
+            primaryPerSlot = new Dictionary<int, int>();
 
-            this.isCleaning = false;
+            isCleaning = false;
             //this.tentativeCommands = new Dictionary<(int, int), ClientCommand>(); // TODO: client commands
             //this.committedCommands = new Dictionary<(int, int), ClientCommand>();
         }
@@ -78,24 +79,26 @@ namespace TKVTransactionManager.Services
             List<DADInt> dadIntsRead = new List<DADInt>();
             Console.WriteLine($"Received transaction request: ");
             Console.WriteLine($"     FROM: {transactionRequest.Id}");
-            foreach (string dadintKey in transactionRequest.Reads)
+            foreach (var dadintKey in transactionRequest.Reads)
             {
                 Console.WriteLine($"     DADINT2READ: {dadintKey}");
                 // add to leasesRequired
                 leasesRequired.Add(dadintKey);
             }
-            foreach (DADInt dadint in transactionRequest.Writes)
+            foreach (var dadint in transactionRequest.Writes)
             {
                 Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
                 leasesRequired.Add(dadint.Key);
             }
 
-            bool allLeases = true;
+            // TODO lease managers knowing about other projects' leases and stuffs (maybe)
+
+            var allLeases = true;
             bool found;
-            foreach (string dadint in leasesRequired)
+            foreach (var dadint in leasesRequired)
             {
                 found = false;
-                foreach (Lease lease in leasesHeld)
+                foreach (var lease in leasesHeld)
                 {
                     if (lease.Permissions.Contains(dadint))
                     {
@@ -111,31 +114,33 @@ namespace TKVTransactionManager.Services
             if (!allLeases)
             {
                 Console.WriteLine($"Requesting leases...");
-                Lease lease = new Lease { Id = processId };
+                var lease = new Lease { Id = processId };
                 lease.Permissions.AddRange(leasesRequired);
-                LeaseRequest leaseRequest = new LeaseRequest { Lease = lease };
-                LeaseResponse leaseResponse = null;
+                var leaseRequest = new LeaseRequest { Slot = currentSlot, Lease = lease };
+                StatusUpdateResponse? statusUpdateResponse = null;
 
-                List<Task> tasks = new List<Task>();
-                foreach (var host in this.leaseManagers)
+                var tasks = new List<Task>();
+                foreach (var host in leaseManagers)
                 {
-                    Task t = Task.Run(() =>
+                    var t = Task.Run(() =>
                     {
                         try
                         {
-                            leaseResponse = leaseManagers[host.Key].Lease(leaseRequest);
+                            Console.WriteLine("sending leaser request");
+                            leaseManagers[host.Key].Lease(leaseRequest);
                         }
                         catch (Grpc.Core.RpcException e)
                         {
                             Console.WriteLine(e.Status);
                         }
+                        statusUpdateResponse = leaseManagers[host.Key].StatusUpdate(new Empty());
                         return Task.CompletedTask;
                     });
                     tasks.Add(t);
                 }
                 Task.WaitAny(tasks.ToArray());
                 
-                if (leaseResponse.Status)
+                if (statusUpdateResponse.Status)
                 { 
                     allLeases = true; 
                     leasesHeld.Add(lease);
@@ -149,16 +154,16 @@ namespace TKVTransactionManager.Services
             if (allLeases)
             {
                 Console.WriteLine($"Lease granted!");
-                foreach (string dadintKey in transactionRequest.Reads)
+                foreach (var dadintKey in transactionRequest.Reads)
                 {
-                    if (transactionManagerDadInts.TryGetValue(dadintKey, out DADInt dadint))
+                    if (transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
                         dadIntsRead.Add(dadint);
                     else
                     {
                         Console.WriteLine("Requested read on non-existing DADINT."); // TODO
                     }
                 }
-                foreach (DADInt dadint in transactionRequest.Writes)
+                foreach (var dadint in transactionRequest.Writes)
                 {
                     if (transactionManagerDadInts.ContainsKey(dadint.Key))
                         transactionManagerDadInts[dadint.Key].Value = dadint.Value;
@@ -170,7 +175,7 @@ namespace TKVTransactionManager.Services
             }
 
             Console.WriteLine($"Finished processing transaction request...");
-            TransactionResponse transactionResponse = new TransactionResponse();
+            var transactionResponse = new TransactionResponse();
             transactionResponse.Response.AddRange(dadIntsRead);
             return transactionResponse;
         }
