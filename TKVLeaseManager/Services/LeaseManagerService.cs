@@ -12,6 +12,7 @@ namespace TKVLeaseManager.Services
         // Config file variables
         private int _processId;
         private string _processName;
+        private List<LeaseRequest> _bufferRequests;
         ////private readonly List<bool> _processFrozenPerSlot;
         private readonly Dictionary<string, Paxos.PaxosClient> _leaseManagerHosts;
         ////private readonly List<Dictionary<string, List<String>>> _processesSuspectedPerSlot;
@@ -335,7 +336,7 @@ namespace TKVLeaseManager.Services
         public bool DoPaxosSlot(LeaseRequest request)
         {
             Monitor.Enter(this);
-
+            _bufferRequests.Add(request);
             var slot = _slots[_currentSlot];
 
             // If paxos isn't running and a value hasn't been decided, start paxos
@@ -456,7 +457,7 @@ namespace TKVLeaseManager.Services
             ////{
             ////}
 
-
+            _bufferRequests.Remove(request);
             Monitor.Exit(this);
             return new()
             {

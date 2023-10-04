@@ -14,21 +14,17 @@ namespace TKVTransactionManager.Services
     {
         // Config file variables
         private readonly string processId;
-        private readonly List<bool> processesCrashedPerSlot;
-        private readonly List<Dictionary<int, bool>> processesSuspectedPerSlot;
+        private readonly List<List<bool>> tmsStatePerSlot; // all TMs states per slot
+        private readonly List<List<string>> tmsSuspectedPerSlot; // processes that this TM suspects to be crashed PER slot
         private readonly Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers;
-        private readonly Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers; // TODO: fix the service / see if its correct
+        private readonly LeaseManagers leaseManagers; // TODO: fix the service / see if its correct
+        private readonly int processIndex;
 
         // Paxos variables
         private bool isCrashed;
-        private int totalSlots;   // The number of total slots elapsed since the beginning of the program
         private int currentSlot;  // The number of experienced slots (process may be frozen and not experience all slots)
-        private readonly Dictionary<int, int> primaryPerSlot;
 
         // Replication variables
-        private decimal balance;
-        private bool isCleaning;
-        private int currentSequenceNumber;
         private Dictionary<string, DADInt> transactionManagerDadInts;
         private List<Lease> leasesHeld;
         //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
@@ -36,35 +32,59 @@ namespace TKVTransactionManager.Services
 
         public ServerService(
             string processId,
-            //List<bool> processCrashedPerSlot,
-            //List<Dictionary<int, bool>> processesSuspectedPerSlot,
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers,
-            Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers
+            LeaseManagers leaseManagers,
+            List<List<bool>> tmsStatePerSlot,
+            List<List<string>> tmsSuspectedPerSlot,
+            int processIndex
             )
         {
             this.processId = processId;
             this.transactionManagers = transactionManagers;
             this.leaseManagers = leaseManagers;
-            //this.processCrashedPerSlot = processCrashedPerSlot;
-            //this.processesSuspectedPerSlot = processesSuspectedPerSlot;
+            this.tmsStatePerSlot = tmsStatePerSlot;
+            this.tmsSuspectedPerSlot = tmsSuspectedPerSlot;
+            this.processIndex = processIndex;
 
             this.isCrashed = false;
-            this.totalSlots = 0;
             this.currentSlot = 0;
-            this.currentSequenceNumber = 0;
             this.transactionManagerDadInts = new();
             this.leasesHeld = new List<Lease>();
-            this.primaryPerSlot = new Dictionary<int, int>();
-
-            this.isCleaning = false;
-            //this.tentativeCommands = new Dictionary<(int, int), ClientCommand>(); // TODO: client commands
-            //this.committedCommands = new Dictionary<(int, int), ClientCommand>();
         }
         // TODO : etc...
 
         public void PrepareSlot()
         {
-            // TODO
+            Monitor.Enter(this);
+
+            // End of slots
+            if (this.currentSlot >= tmsStatePerSlot.Count)
+            {
+                Console.WriteLine("Slot duration ended but no more slots to process.");
+                return;
+            }
+
+            Console.WriteLine($"Preparing slot... ------------------------------------------");
+
+            // get process state
+            this.isCrashed = tmsStatePerSlot[this.currentSlot][processIndex];
+
+            Console.WriteLine($"Process is now {(this.isCrashed ? "crashed" : "normal")}");
+
+            // Global slot counter
+            this.currentSlot++;
+
+            // If process is crashed, don't do anything
+            if (this.isCrashed)
+            {
+                Console.WriteLine("Ending preparation -----------------------");
+                Monitor.Exit(this);
+                return;
+            }
+
+            Monitor.PulseAll(this);
+
+            Monitor.Exit(this);
         }
 
         public StatusResponse Status(StatusRequest statusRequest)
