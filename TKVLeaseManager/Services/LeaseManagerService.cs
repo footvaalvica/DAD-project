@@ -485,6 +485,8 @@ namespace TKVLeaseManager.Services
 
             // TODO should wait for Paxos to finish before replying
 
+            _bufferLeaseRequests.Clear();
+
             Monitor.Exit(this);
             return new StatusUpdateResponse
             {

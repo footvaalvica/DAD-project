@@ -79,14 +79,35 @@ namespace TKVTransactionManager
                 }
             }
 
-            // TODO: Check if this is correct
-            //List<bool> processCrashedPerSlot = config.ProcessStates.Select(states => states[processId].Crashed).ToList();
+            List<List<bool>> tmsStatePerSlot = new List<List<bool>>();
+            List<List<string>> tmsSuspectedPerSlot = new List<List<string>>();
 
-            // A process should not suspect itself (it knows if its frozen or not) // ^^^^^^ get the stuff correct first
-            //for (int i = 0; i < processesSuspectedPerSlot.Count; i++)
-            //    processesSuspectedPerSlot[i][processId] = processFrozenPerSlot[i];
 
-            ServerService serverService = new(processId, transactionManagers, leaseManagers); // processCrashedPerSlot, processesSuspectedPerSlot, 
+            for (int i = 0; i < config.ProcessStates.Length; i++)
+            {
+                tmsStatePerSlot.Add(new List<bool>());
+                tmsSuspectedPerSlot.Add(new List<string>());
+
+                if (config.ProcessStates[i] == null)
+                {
+                    tmsStatePerSlot[i] = tmsStatePerSlot[i - 1];
+                    tmsSuspectedPerSlot[i] = tmsSuspectedPerSlot[i - 1];
+                    continue;
+                }
+                
+                else
+                {
+                    for (int j = 0; j < config.TransactionManagers.Count - 1; j++)
+                    {
+                        tmsStatePerSlot[i].Add(config.ProcessStates[i][config.TransactionManagers[j].Id].Crashed);
+                    }
+                    tmsSuspectedPerSlot[i] = config.ProcessStates[i][processId].Suspects; // getting the tms that each tm suspects PER slot. i = slotId
+                }
+
+            }
+            int processIndex = config.TransactionManagers.FindIndex(x => x.Id == processId);
+
+            ServerService serverService = new(processId, transactionManagers, leaseManagers, tmsStatePerSlot, tmsSuspectedPerSlot, processIndex); // processCrashedPerSlot, processesSuspectedPerSlot, 
 
             Server server = new Server
             {
