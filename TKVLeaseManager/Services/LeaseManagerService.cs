@@ -372,11 +372,6 @@ namespace TKVLeaseManager.Services
             }
             Console.WriteLine("tha hell");
 
-            // block for 500 miliseconds for other processes to process slot
-            Monitor.Exit(this);
-            Thread.Sleep(1000);
-            Monitor.Enter(this);
-
             // 1: who's the leader?
             var leader = int.MaxValue;
             for (int i = 0; i < _statePerSlot[_currentSlot - 1].Count; i++)

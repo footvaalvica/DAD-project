@@ -10,23 +10,29 @@ using Google.Protobuf.WellKnownTypes;
 
 namespace TKVTransactionManager.Services
 {
-    using LeaseManagers = Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient>;
+    using LeaseManagers =
+        Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient>;
+
     public class ServerService
     {
         // Config file variables
         private readonly string processId;
         private readonly List<List<bool>> tmsStatePerSlot; // all TMs states per slot
-        private readonly List<List<string>> tmsSuspectedPerSlot; // processes that this TM suspects to be crashed PER slot
+
+        private readonly List<List<string>>
+            tmsSuspectedPerSlot; // processes that this TM suspects to be crashed PER slot
+
         private readonly Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers;
         private readonly LeaseManagers leaseManagers; // TODO: fix the service / see if its correct
         private readonly int processIndex;
 
         // Paxos variables
         private bool isCrashed;
-        private int currentSlot;  // The number of experienced slots (process may be frozen and not experience all slots)
+        private int currentSlot; // The number of experienced slots (process may be frozen and not experience all slots)
 
         // Replication variables
         private Dictionary<string, DADInt> transactionManagerDadInts;
+
         private List<Lease> leasesHeld;
         //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
         //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
@@ -38,7 +44,7 @@ namespace TKVTransactionManager.Services
             List<List<bool>> tmsStatePerSlot,
             List<List<string>> tmsSuspectedPerSlot,
             int processIndex
-            )
+        )
         {
             this.processId = processId;
             this.transactionManagers = transactionManagers;
@@ -107,6 +113,7 @@ namespace TKVTransactionManager.Services
                 // add to leasesRequired
                 leasesRequired.Add(dadintKey);
             }
+
             foreach (var dadint in transactionRequest.Writes)
             {
                 Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
@@ -128,6 +135,7 @@ namespace TKVTransactionManager.Services
                         break;
                     }
                 }
+
                 if (!found)
                     allLeases = false;
                 break;
@@ -155,24 +163,26 @@ namespace TKVTransactionManager.Services
                         {
                             Console.WriteLine(e.Status);
                         }
+
                         statusUpdateResponse = leaseManagers[host.Key].StatusUpdate(new Empty());
                         return Task.CompletedTask;
                     });
                     tasks.Add(t);
                 }
+
                 Task.WaitAny(tasks.ToArray());
-                
+
                 if (statusUpdateResponse.Status)
-                { 
-                    allLeases = true; 
+                {
+                    allLeases = true;
                     leasesHeld.Add(lease);
                 }
-                else 
+                else
                 {
                     Console.WriteLine("Failed to acquire leases!"); // TODO
                 }
             }
-            
+
             if (allLeases)
             {
                 Console.WriteLine($"Lease granted!");
@@ -185,6 +195,7 @@ namespace TKVTransactionManager.Services
                         Console.WriteLine("Requested read on non-existing DADINT."); // TODO
                     }
                 }
+
                 foreach (var dadint in transactionRequest.Writes)
                 {
                     if (transactionManagerDadInts.ContainsKey(dadint.Key))
@@ -215,6 +226,7 @@ namespace TKVTransactionManager.Services
                 });
                 tasks.Add(t);
             }
+
             Task.WaitAny(tasks.ToArray());
 
             bool leaseRemoved = false;
@@ -252,5 +264,6 @@ namespace TKVTransactionManager.Services
                     }
                 }
             }
+        }
     }
 }
