@@ -97,7 +97,7 @@ namespace TKVTransactionManager
                 
                 else
                 {
-                    for (int j = 0; j < config.TransactionManagers.Count - 1; j++)
+                    for (int j = 0; j < config.TransactionManagers.Count; j++)
                     {
                         tmsStatePerSlot[i].Add(config.ProcessStates[i][config.TransactionManagers[j].Id].Crashed);
                     }
