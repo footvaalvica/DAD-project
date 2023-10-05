@@ -114,7 +114,7 @@ namespace TKVTransactionManager.Services
                 leasesRequired.Add(dadintKey);
             }
 
-            foreach (var dadint in transactionRequest.Writes)
+	    foreach (var dadint in transactionRequest.Writes)
             {
                 Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
                 leasesRequired.Add(dadint.Key);
@@ -163,18 +163,18 @@ namespace TKVTransactionManager.Services
                         {
                             Console.WriteLine(e.Status);
                         }
-
-                        statusUpdateResponse = leaseManagers[host.Key].StatusUpdate(new Empty());
+                        
+			statusUpdateResponse = leaseManagers[host.Key].StatusUpdate(new Empty());
                         return Task.CompletedTask;
                     });
                     tasks.Add(t);
                 }
 
                 Task.WaitAny(tasks.ToArray());
-
+                
                 if (statusUpdateResponse.Status)
-                {
-                    allLeases = true;
+                { 
+                    allLeases = true; 
                     leasesHeld.Add(lease);
                 }
                 else
@@ -195,8 +195,8 @@ namespace TKVTransactionManager.Services
                         Console.WriteLine("Requested read on non-existing DADINT."); // TODO
                     }
                 }
-
-                foreach (var dadint in transactionRequest.Writes)
+                
+		foreach (var dadint in transactionRequest.Writes)
                 {
                     if (transactionManagerDadInts.ContainsKey(dadint.Key))
                         transactionManagerDadInts[dadint.Key].Value = dadint.Value;
