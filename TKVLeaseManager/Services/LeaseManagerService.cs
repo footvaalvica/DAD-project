@@ -68,17 +68,19 @@ namespace TKVLeaseManager.Services
             ////    Console.WriteLine("Slot duration ended but no more slots to process.");
             ////    return;
             ////}
+            
+            // TODO should not process if previous slot was running still? prolly wait a bit
 
             Console.WriteLine("Preparing new slot -----------------------");
 
             // Switch process state
             ////_isFrozen = _processFrozenPerSlot[_currentSlot];
-            if (_currentSlot > 0)
+            if (_currentSlot > 0) {
                 _slots[_currentSlot].IsPaxosRunning = false;
+            }
             Monitor.PulseAll(this);
             ////Console.WriteLine($"Process is now {(_isFrozen ? "frozen" : "normal")} for slot {_currentSlot+1}");
 
-            // TODO not sure if this should be here
             DoPaxosSlot();
 
             _currentSlot += 1;
@@ -469,7 +471,9 @@ namespace TKVLeaseManager.Services
             SendAcceptRequest(_currentSlot, leaderCurrentId, valueToPropose);
 
             // Wait for learners to decide
-            return WaitForPaxos(slot);
+            var retVal = WaitForPaxos(slot);
+            _bufferLeaseRequests.Clear();
+            return retVal;
         }
 
         public StatusUpdateResponse StatusUpdate()
@@ -479,8 +483,6 @@ namespace TKVLeaseManager.Services
             var slot = _slots[_currentSlot]; // TODO
 
             // TODO should wait for Paxos to finish before replying
-
-            _bufferLeaseRequests.Clear();
 
             Monitor.Exit(this);
             return new StatusUpdateResponse
