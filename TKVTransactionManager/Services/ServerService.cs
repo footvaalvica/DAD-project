@@ -85,6 +85,8 @@ namespace TKVTransactionManager.Services
 
             Monitor.PulseAll(this);
 
+            askForLeaseManagersStatus();
+
             Monitor.Exit(this);
         }
 
@@ -199,5 +201,56 @@ namespace TKVTransactionManager.Services
             transactionResponse.Response.AddRange(dadIntsRead);
             return transactionResponse;
         }
+
+        public void askForLeaseManagersStatus()
+        {
+            StatusUpdateResponse statusUpdateResponse = new StatusUpdateResponse();
+            var tasks = new List<Task>();
+            foreach (var host in leaseManagers)
+            {
+                var t = Task.Run(() =>
+                {
+                    statusUpdateResponse = leaseManagers[host.Key].StatusUpdate(new Empty());
+                    return Task.CompletedTask;
+                });
+                tasks.Add(t);
+            }
+            Task.WaitAny(tasks.ToArray());
+
+            bool leaseRemoved = false;
+
+            // we are going to check for conflict leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
+            // if the lease is in conflict, this TM should release the Lease it holds. 
+
+            if (statusUpdateResponse.Status)
+            {
+                foreach (Lease lease in statusUpdateResponse.Leases)
+                {
+                    // Check if the lease is held by another process (TM)
+                    if (lease.Id != processId)
+                    {
+                        // Iterate through leases held by the current process
+                        foreach (Lease heldLease in leasesHeld.ToList())
+                        {
+                            // Check for conflicting permissions
+                            if (lease.Permissions.Intersect(heldLease.Permissions).Any())
+                            {
+                                // Remove conflicting lease
+                                leasesHeld.Remove(heldLease);
+                                leaseRemoved = true;
+
+                                // Exit inner loop since a conflicting lease was removed
+                                break;
+                            }
+                        }
+
+                        // Exit outer loop if a conflicting lease was removed
+                        if (leaseRemoved)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
     }
 }
