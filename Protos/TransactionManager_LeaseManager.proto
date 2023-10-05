@@ -8,14 +8,11 @@ import "google/protobuf/empty.proto";
 message LeaseRequest {
 	int32 slot = 1;
 	Lease lease = 2;
-	// int32 slot = 2;
 }
 
 message StatusUpdateResponse {
 	int32 slot = 1;
-	bool status = 2;
-	repeated Lease leases = 3;
-	// int32 number = 3;
+	repeated Lease leases = 2;
 }
 
 service TransactionManager_LeaseManagerService {

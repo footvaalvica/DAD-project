@@ -297,6 +297,7 @@ namespace TKVLeaseManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
+            Console.WriteLine("got majority accepts!");
             return acceptResponses;
         }
 
@@ -487,9 +488,9 @@ namespace TKVLeaseManager.Services
             // Send accept to all acceptors which will send decide to all learners
             SendAcceptRequest(_currentSlot, leaderCurrentId, valueToPropose);
 
+            Console.WriteLine($"Paxos slot in slot {_currentSlot} for slot {_currentSlot} IS BALLS");
             // Wait for learners to decide
             var retVal = WaitForPaxos(slot);
-            _bufferLeaseRequests.Clear();
             return retVal;
         }
 
@@ -505,10 +506,6 @@ namespace TKVLeaseManager.Services
             return new StatusUpdateResponse
             {
                 Slot = slot.Slot,
-
-                // TODO FIX this, probably make the current request a global smth? idk
-                ////Status = slot.DecidedValues.Contains(request.Lease),
-                Status = true,
                 Leases = { slot.DecidedValues }
             };
         }
