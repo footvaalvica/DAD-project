@@ -13,6 +13,13 @@ namespace TKVTransactionManager.Services
     using LeaseManagers =
         Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient>;
 
+    // TODO why struct and not class?
+    public struct TransactionState
+    {
+        public List<string> Leases { get; set; }
+        public TransactionRequest Request { get; set; }
+    }
+
     public class ServerService
     {
         // Config file variables
@@ -40,7 +47,7 @@ namespace TKVTransactionManager.Services
         private List<DADInt> _dadIntsRead;
 
         // TODO this assumes sequential transactions, which might be the case? I don't know
-        private TransactionRequest _currentTransactionRequest;
+        private List<TransactionState> _transactionsState;
         //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
         //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
 
@@ -67,7 +74,7 @@ namespace TKVTransactionManager.Services
 
             _allLeases = false;
             _dadIntsRead = new List<DADInt>();
-            _currentTransactionRequest = new TransactionRequest();
+            _transactionsState = new List<TransactionState>();
         }
         // TODO : etc...
 
@@ -117,34 +124,39 @@ namespace TKVTransactionManager.Services
         public TransactionResponse TxSubmit(TransactionRequest transactionRequest)
         {
             var leasesRequired = new List<string>();
-            _dadIntsRead = new List<DADInt>();
-            _currentTransactionRequest = transactionRequest;
+            _dadIntsRead = new List<DADInt>(); // TODO ??
+
+            TransactionState transactionState = new TransactionState { Leases = new(), Request = transactionRequest };
+
             Console.WriteLine($"Received transaction request: ");
-            Console.WriteLine($"     FROM: {_currentTransactionRequest.Id}");
-            foreach (var dadintKey in _currentTransactionRequest.Reads)
+            Console.WriteLine($"     FROM: {transactionRequest.Id}");
+
+            foreach (var dadintKey in transactionRequest.Reads)
             {
                 Console.WriteLine($"     DADINT2READ: {dadintKey}");
                 // add to leasesRequired
                 leasesRequired.Add(dadintKey);
             }
 
-            foreach (var dadint in _currentTransactionRequest.Writes)
+            foreach (var dadint in transactionRequest.Writes)
             {
                 Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
                 leasesRequired.Add(dadint.Key);
             }
 
             // check if has all leases
-            _allLeases = leasesRequired.Select(dadint => _leasesHeld.Any(lease => lease.Permissions.Contains(dadint))).All(found => found);
+            transactionState.Leases = leasesRequired
+                .Where(lease => !_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(lease)))
+                .ToList();
 
             // TODO lease managers knowing about other projects' leases and stuffs (maybe)
 
             // if it doesn't have all leases, request them
-            if (!_allLeases)
+            if (transactionState.Leases.Count > 0)
             {
                 Console.WriteLine($"Requesting leases...");
                 var lease = new Lease { Id = _processId };
-                lease.Permissions.AddRange(leasesRequired);
+                lease.Permissions.AddRange(transactionState.Leases);
                 var leaseRequest = new LeaseRequest { Slot = _currentSlot, Lease = lease };
 
                 var tasks = new List<Task>();
@@ -172,13 +184,14 @@ namespace TKVTransactionManager.Services
             var transactionResponse = new TransactionResponse();
 
             // TODO when replying we should compare slot of the request with the current slot and reply accordingly
-            transactionResponse.Response.AddRange(_dadIntsRead);
+            transactionResponse.Response.AddRange(_dadIntsRead); // TODO: dadIntsRead is empty
             return transactionResponse;
         }
 
         // TODO this function should store things globally
         public void AskForLeaseManagersStatus()
         {
+            Console.WriteLine("Requesting status update from lease managers...");
             var statusUpdateResponse = new StatusUpdateResponse();
             var tasks = new List<Task>();
             foreach (var host in _leaseManagers)
@@ -198,13 +211,14 @@ namespace TKVTransactionManager.Services
 
             Console.WriteLine($"Received status update from lease managers");
 
-            var leaseRemoved = false;
+            Console.WriteLine($"    Got ({statusUpdateResponse.Leases.Count}) Leases.");
 
             // we are going to check for conflict leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
             // if the lease is in conflict, this TM should release the Lease it holds. 
-
+            bool leaseRemoved;
             foreach (var lease in statusUpdateResponse.Leases)
             {
+                leaseRemoved = false;
                 // Check if the lease is held by another process (TM)
                 if (lease.Id == _processId) continue;
                 // Iterate through leases held by the current process
@@ -218,29 +232,22 @@ namespace TKVTransactionManager.Services
                     break;
                 }
 
-                // Exit outer loop if a conflicting lease was removed
-                if (leaseRemoved)
-                {
-                    break;
-                }
+                _leasesHeld.Add(lease);
 
-                // check if the process has obtained all the leases it requested
-                // TODO I'm not sure if this code is correct
-                if (lease.Permissions.All(permission => _leasesHeld.Any(heldLease => heldLease.Permissions.Contains(permission))))
+                // Exit outer loop if a conflicting lease was removed // why?
+                if (leaseRemoved) { continue; }
+
+                foreach (TransactionState transactionState in _transactionsState.Where(_transactionsState => _transactionsState.Leases.Count > 0))
                 {
-                    _allLeases = true;
-                    _leasesHeld.Add(lease);
-                }
-                else
-                {
-                    Console.WriteLine("failed to acquire leases");
+                    transactionState.Leases.RemoveAll(leaseRequest => lease.Permissions.Contains(leaseRequest));
                 }
             }
 
-            if (_allLeases)
+            foreach (TransactionState transactionState in _transactionsState
+                .Where(_transactionsState => _transactionsState.Leases.Count == 0))
             {
                 Console.WriteLine($"Lease granted!");
-                foreach (var dadintKey in _currentTransactionRequest.Reads)
+                foreach (var dadintKey in transactionState.Request.Reads)
                 {
                     if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
                         _dadIntsRead.Add(dadint);
@@ -250,19 +257,18 @@ namespace TKVTransactionManager.Services
                     }
                 }
 
-                foreach (var dadint in _currentTransactionRequest.Writes)
+                foreach (var dadint in transactionState.Request.Writes)
                 {
-                    if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var i))
-                        i.Value = dadint.Value;
+                    if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
+                        j.Value = dadint.Value;
                     else
                     {
                         Console.WriteLine("Requested write on non-existing DADINT."); // TODO
                     }
                 }
             }
+            _transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
 
-            // clears the transaction request
-            _currentTransactionRequest = new TransactionRequest();
             Monitor.Exit(this);
         }
     }

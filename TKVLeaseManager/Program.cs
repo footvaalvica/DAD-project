@@ -25,7 +25,7 @@ namespace TKVLeaseManager
             timer = new Timer(x =>
             {
                 leaseManagerService.PrepareSlot();
-            }, null, (int)timeToGo.TotalMilliseconds + 100, slotDuration);
+            }, null, (int)timeToGo.TotalMilliseconds, slotDuration);
         }
 
         static void Main(string[] args)
