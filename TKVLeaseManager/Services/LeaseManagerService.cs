@@ -510,6 +510,7 @@ namespace TKVLeaseManager.Services
             ////Monitor.Exit(this);
             // Send accept to all acceptors which will send decide to all learners
             SendAcceptRequest(_currentSlot, leaderCurrentId, valueToPropose);
+            Console.WriteLine($"Paxos slot in slot {_currentSlot} for slot {_currentSlot} IS BALLS");
             // Wait for learners to decide
             var retVal = WaitForPaxos(slot);
             return retVal;

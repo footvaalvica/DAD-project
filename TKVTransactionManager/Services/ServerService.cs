@@ -228,6 +228,33 @@ namespace TKVTransactionManager.Services
                     break;
                 }
             }
+          
+            // not part of checkpoint - transaction processing
+            // // foreach (TransactionState transactionState in _transactionsState
+            // //     .Where(_transactionsState => _transactionsState.Leases.Count == 0))
+            // // {
+            // //     Console.WriteLine($"    Finally executing transaction...");
+            // //     foreach (var dadintKey in transactionState.Request.Reads)
+            // //     {
+            // //         if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
+            // //             _dadIntsRead.Add(dadint);
+            // //         else
+            // //         {
+            // //             Console.WriteLine("     Requested read on non-existing DADINT."); // TODO
+            // //         }
+            // //     }
+
+            // //     foreach (var dadint in transactionState.Request.Writes)
+            // //     {
+            // //         if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
+            // //             j.Value = dadint.Value;
+            // //         else
+            // //         {
+            // //             Console.WriteLine("     Requested write on non-existing DADINT (to be implemented)."); // TODO
+            // //         }
+            // //     }
+            // // }
+            // // _transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
 
             Monitor.Exit(this);
         }

@@ -1,6 +1,43 @@
 syntax = "proto3";
 
 package TransactionManager_TransactionManagerProto;
+// TODO : remove/change/add stuff
+
+message Command {
+	int32 slot = 1;
+	int32 clientId = 2;
+	int32 clientSequenceNumber = 3;
+	int32 sequenceNumber = 4;
+	string value = 6;
+}
+
+message TentativeRequest {
+	int32 processId = 1;
+	Command command = 2;
+}
+message TentativeReply {
+	bool acknowledge = 1;
+}
+
+message CommitRequest {
+	int32 processId = 1;
+	Command command = 2;
+}
+message CommitReply {
+}
+
+
+// wtf is this
+// wtf is this
+message ListPendingRequestsRequest {
+	int32 lastKnownSequenceNumber = 1;
+}
+message ListPendingRequestsReply {
+	repeated Command commands = 1;
+}
 
 service TwoPhaseCommit {
+	rpc Tentative(TentativeRequest)						returns (TentativeReply);
+	rpc Commit(CommitRequest)							returns (CommitReply);
+	rpc ListPendingRequests(ListPendingRequestsRequest) returns (ListPendingRequestsReply);
 }

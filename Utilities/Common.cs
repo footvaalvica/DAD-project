@@ -26,7 +26,8 @@ namespace Utilities
     public struct ProcessState
     {
         public bool Crashed { get; }
-        public List<string> Suspects { get; } 
+        public List<string> Suspects { get; } // TODO: idk if this should be diff
+
         public ProcessState(bool crashed, List<string> suspects)
         {
             this.Crashed = crashed;
