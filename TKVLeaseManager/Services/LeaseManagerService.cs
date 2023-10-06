@@ -82,7 +82,7 @@ namespace TKVLeaseManager.Services
                 _slots[_currentSlot].IsPaxosRunning = false;
             }
 
-            Monitor.PulseAll(this);
+            ////Monitor.PulseAll(this);
             ////Console.WriteLine($"Process is now {(_isFrozen ? "frozen" : "normal")} for slot {_currentSlot+1}");
 
             Monitor.Exit(this);
@@ -219,6 +219,8 @@ namespace TKVLeaseManager.Services
             }
             Console.WriteLine("removed leases");
 
+            Monitor.PulseAll(this);
+
             Monitor.Exit(this);
             return new DecideReply
             {
@@ -350,9 +352,10 @@ namespace TKVLeaseManager.Services
             Monitor.Enter(this);
             var success = true;
             Console.WriteLine("waiting for paxos");
-            Monitor.Wait(this); // TODO why was this moved and why does it completely change things
             while (slot.IsPaxosRunning)
             {
+                Monitor.Wait(this); // TODO why was this moved and why does it completely change things
+
                 Console.WriteLine($"ALKAAAAAAAAAAAAAAAAAaa {(slot.IsPaxosRunning ? "true" : "false")}");
                 Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(!slot.DecidedValues.Except(new List<Lease>()).Any() ? "true" : "false")})");
                 // Slot ended without reaching consensus
@@ -364,8 +367,8 @@ namespace TKVLeaseManager.Services
                     success = false;
                     break;
                 }
+                Console.WriteLine("Paxos was sucessful!: + " + success);
             }
-            Console.WriteLine("Paxos was sucessful!: + " + success);
             Monitor.Exit(this);
             return success;
         }
