@@ -93,7 +93,7 @@ namespace TKVLeaseManager.Services
 
             // Switch process state
             _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
-            Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot + 1}");
+            Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}");
 
             if (_currentSlot > 0)
             {
@@ -263,8 +263,16 @@ namespace TKVLeaseManager.Services
 
             List<PromiseReply> promiseResponses = new();
 
+            List<string> badHosts = new();
+            for (int i = 0; i < _processBook.Count; i++)
+            {
+                if (_statePerSlot[slot][i].Crashed)
+                    badHosts.Add(_processBook[i]);
+            }
+
             List<Task> tasks = new();
-            foreach (var host in _leaseManagerHosts)
+            foreach (var host in _leaseManagerHosts.Where(host => !badHosts.Contains(host.Key)
+                && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key)))
             {
                 var t = Task.Run(() =>
                 {
@@ -302,11 +310,19 @@ namespace TKVLeaseManager.Services
             };
             acceptRequest.Leases.AddRange(lease);
 
+            List<string> badHosts = new();
+            for (int i = 0; i < _processBook.Count; i++)
+            {
+                if (_statePerSlot[slot][i].Crashed)
+                    badHosts.Add(_processBook[i]);
+            }
+
             Console.WriteLine($"({slot}) Sending Accept({leaderId % _leaseManagerHosts.Count},{lease})");
 
             var acceptResponses = new List<AcceptedReply>();
 
-            var tasks = _leaseManagerHosts
+            var tasks = _leaseManagerHosts.Where(host => !badHosts.Contains(host.Key)
+                && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
                 {
                     Console.WriteLine("Sending accept request");
@@ -345,8 +361,17 @@ namespace TKVLeaseManager.Services
             };
             decideRequest.Leases.AddRange(lease);
 
+            List<string> badHosts = new();
+            for (int i=0; i<_processBook.Count; i++)
+            {
+                if (_statePerSlot[slot][i].Crashed)
+                    badHosts.Add(_processBook[i]);
+            }
+
             Console.WriteLine($"({slot}) Sending Decide({writeTimestamp},{lease})");
-            foreach (var t in _leaseManagerHosts.Where(host => host.Key != _processName).Select(host => Task.Run(() =>
+            foreach (var t in _leaseManagerHosts.Where(host => host.Key != _processName && !badHosts.Contains(host.Key)
+              && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
+                .Select(host => Task.Run(() =>
             {
                 try
                 {
@@ -374,7 +399,7 @@ namespace TKVLeaseManager.Services
             while (slot.IsPaxosRunning)
             {
                 Monitor.Wait(this);
-                Console.WriteLine($"SLOT ({slot.Slot}) HAS ({slot.DecidedValues.Count}) VALUES");
+
                 Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(!slot.DecidedValues.Except(new List<Lease>()).Any() ? "true" : "false")})");
                 // Slot ended without reaching consensus -> Do paxos again with another configuration
                 if (_currentSlot > slot.Slot && !slot.DecidedValues.Except(new List<Lease>()).Any())
@@ -504,8 +529,6 @@ namespace TKVLeaseManager.Services
             {
                 Monitor.Wait(this);
             }
-            
-            Console.WriteLine($"XYZ: SLOT ({slot.Slot}) HAS ({slot.DecidedValues.Count}) VALUES");
 
             Monitor.Exit(this);
             return new StatusUpdateResponse
