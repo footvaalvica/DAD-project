@@ -1,8 +1,5 @@
 // TODO!
 
-using Google.Protobuf.Collections;
-using LeaseManagerLeaseManagerServiceProto;
-
 namespace TKVLeaseManager.Domain
 {
     public class SlotData

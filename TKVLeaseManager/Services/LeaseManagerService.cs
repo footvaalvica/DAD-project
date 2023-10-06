@@ -3,7 +3,6 @@ using TKVLeaseManager.Domain;
 using TransactionManagerLeaseManagerServiceProto;
 using LeaseManagerLeaseManagerServiceProto;
 using Utilities;
-using System.Runtime.Serialization.Formatters;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 

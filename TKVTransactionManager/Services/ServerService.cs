@@ -1,11 +1,6 @@
 ﻿using TransactionManagerTransactionManagerProto;
 using TransactionManagerLeaseManagerServiceProto;
-using System.Data;
-using System.Globalization;
 using ClientTransactionManagerProto;
-using System.Security;
-using System.Diagnostics;
-using System.Threading.Tasks;
 using Google.Protobuf.WellKnownTypes;
 
 namespace TKVTransactionManager.Services

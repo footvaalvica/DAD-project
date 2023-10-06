@@ -1,7 +1,6 @@
 ﻿using Grpc.Net.Client;
 using Utilities;
 using ClientTransactionManagerProto;
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace TKVClient
