@@ -39,7 +39,6 @@ namespace TKVClient
                     try
                     {
                         StatusResponse statusResponse = tm.Value.Status(request);
-                        // TODO: primary???
                         if (statusResponse.Status)
                             Console.WriteLine($"Status: Transaction Manager with id ({tm.Key}) is alive!");
                     }
@@ -212,7 +211,7 @@ namespace TKVClient
             });
 
             // Read client scripts
-            string baseDirectory = Common.GetSolutionDir();
+            string baseDirectory = Common.GetSolutionDirectory();
             string scriptFilePath = Path.Join(baseDirectory, "TKVClient", "Scripts", scriptName + ".txt");
             Console.WriteLine("Using script (" + scriptFilePath + ") for TKVClient.");
 
