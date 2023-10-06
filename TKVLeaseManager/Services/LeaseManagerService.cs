@@ -8,18 +8,42 @@ using Google.Protobuf.WellKnownTypes;
 
 namespace TKVLeaseManager.Services
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+
+    public class TupleEqualityComparer<T1, T2> : IEqualityComparer<(T1, T2)>
+    {
+        public bool Equals((T1, T2) x, (T1, T2) y)
+        {
+            return EqualityComparer<T1>.Default.Equals(x.Item1, y.Item1) &&
+                   Enumerable.SequenceEqual((IEnumerable<Lease>)x.Item2, (IEnumerable<Lease>)y.Item2); // Compare IEnumerable<Lease> based on its elements
+        }
+
+        public int GetHashCode((T1, T2) obj)
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 23 + obj.Item1.GetHashCode();
+                foreach (var item in (IEnumerable<Lease>)obj.Item2)
+                {
+                    hash = hash * 23 + item.GetHashCode();
+                }
+                return hash;
+            }
+        }
+    }
+
     public class LeaseManagerService
     {
         // Config file variables
         private int _processId;
         private string _processName;
-        private List<LeaseRequest> _bufferRequests;
-        ////private readonly List<bool> _processFrozenPerSlot;
         private readonly Dictionary<string, Paxos.PaxosClient> _leaseManagerHosts;
-        ////private readonly List<Dictionary<string, List<String>>> _processesSuspectedPerSlot;
 
         // Changing variables
-        ////private bool _isFrozen;
+        private bool _isCrashed;
         private int _currentSlot;
         private readonly List<List<ProcessState>> _statePerSlot;
         private readonly List<string> _processBook;
@@ -45,7 +69,7 @@ namespace TKVLeaseManager.Services
             ////_processesSuspectedPerSlot = processesSuspectedPerSlot;
 
             _currentSlot = 0;
-            ////_isFrozen = false;
+            _isCrashed = false;
 
             _processBook = processBook;
             _statePerSlot = statePerSlot;
@@ -75,15 +99,15 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"Have ({_bufferLeaseRequests.Count}) requests to process for this slot");
             // Switch process state
-            ////_isFrozen = _processFrozenPerSlot[_currentSlot];
-
+            //_isCrashed = _statePerSlot[_currentSlot][_processId].Crashed;
             if (_currentSlot > 0)
             {
                 _slots[_currentSlot].IsPaxosRunning = false;
             }
 
-            ////Monitor.PulseAll(this);
-            ////Console.WriteLine($"Process is now {(_isFrozen ? "frozen" : "normal")} for slot {_currentSlot+1}");
+            Monitor.PulseAll(this);
+
+            //Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot+1}");
 
             Monitor.Exit(this);
             DoPaxosSlot();
@@ -190,13 +214,18 @@ namespace TKVLeaseManager.Services
             var majority = _leaseManagerHosts.Count / 2 + 1;
 
             // Create a dictionary to count the number of times a request appears
-            var receivedRequests = new Dictionary<(int, List<Lease>), int>();
+            var receivedRequests = new Dictionary<(int, List<Lease>), int>(new TupleEqualityComparer<int, List<Lease>>());
             foreach (var entry in slot.DecidedReceived)
             {
-                if (receivedRequests.ContainsKey(entry))
-                    receivedRequests[entry]++;
+                var key = (entry.Item1, entry.Item2); // Create a tuple with the same structure
+                if (receivedRequests.ContainsKey(key))
+                {
+                    receivedRequests[key]++;
+                }
                 else
-                    receivedRequests.Add(entry, 1);
+                {
+                    receivedRequests.Add(key, 1);
+                }
             }
 
             // If a request appears more times than the majority value, it's the decided value
@@ -217,9 +246,7 @@ namespace TKVLeaseManager.Services
                 // Remove Lease request that contains this lease if the request is in the buffer
                 _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => leaseRequest.Lease.Equals(lease)).ToList(); // TODO: not very concurrency friendly
             }
-            Console.WriteLine("removed leases");
-
-            Monitor.PulseAll(this);
+            Console.WriteLine("Finished removing requests from buffer");
 
             Monitor.Exit(this);
             return new DecideReply
@@ -270,7 +297,7 @@ namespace TKVLeaseManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
-            Console.WriteLine("got majority promises!");
+            Console.WriteLine("got majority promise responses");
 
             return promiseResponses;
         }
@@ -354,9 +381,8 @@ namespace TKVLeaseManager.Services
             Console.WriteLine("waiting for paxos");
             while (slot.IsPaxosRunning)
             {
-                Monitor.Wait(this); // TODO why was this moved and why does it completely change things
-
-                Console.WriteLine($"ALKAAAAAAAAAAAAAAAAAaa {(slot.IsPaxosRunning ? "true" : "false")}");
+                Monitor.Wait(this);
+                Console.WriteLine($"SLOT ({slot.Slot}) HAS ({slot.DecidedValues.Count}) VALUES");
                 Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(!slot.DecidedValues.Except(new List<Lease>()).Any() ? "true" : "false")})");
                 // Slot ended without reaching consensus
                 // Do paxos again with another configuration
@@ -367,8 +393,8 @@ namespace TKVLeaseManager.Services
                     success = false;
                     break;
                 }
-                Console.WriteLine("Paxos was sucessful!: + " + success);
             }
+            Console.WriteLine("Paxos was sucessful!: + " + success);
             Monitor.Exit(this);
             return success;
         }
@@ -507,7 +533,12 @@ namespace TKVLeaseManager.Services
 
             var slot = _currentSlot > 1 ? _slots[_currentSlot - 1] : _slots[_currentSlot];
 
-            // TODO should wait for Paxos of the previous slot to finish before replying
+            while (slot.IsPaxosRunning && slot.DecidedValues.SequenceEqual(new List<Lease>())) // could the list not be empty now?
+            {
+                Monitor.Wait(this);
+            }
+            
+            Console.WriteLine($"XYZ: SLOT ({slot.Slot}) HAS ({slot.DecidedValues.Count}) VALUES");
 
             Monitor.Exit(this);
             return new StatusUpdateResponse
