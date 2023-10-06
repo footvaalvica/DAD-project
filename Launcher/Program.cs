@@ -7,61 +7,57 @@ namespace Launcher
     {
         static Process StartProcess(string path, string args)
         {
-            var pInfo = new ProcessStartInfo();
+            var processInfo = new ProcessStartInfo();
 
-            pInfo.UseShellExecute = true;
-            pInfo.FileName = path;
-            pInfo.Arguments = args;
-            pInfo.CreateNoWindow = false;
-            pInfo.WindowStyle = ProcessWindowStyle.Normal;
+            processInfo.UseShellExecute = true;
+            processInfo.FileName = path;
+            processInfo.Arguments = args;
+            processInfo.CreateNoWindow = false;
+            processInfo.WindowStyle = ProcessWindowStyle.Normal;
 
-            return Process.Start(pInfo);
+            return Process.Start(processInfo);
         }
 
-        static Process CreateProcess(string baseDir, string[] configArgs)
+        static Process CreateProcess(string baseDirectory, string[] configArgs)
         {
-            var clientPath = Path.Combine(baseDir, "TKVClient", "bin", "Debug", "net6.0", "TKVClient.exe");
-            var transactionManagerPath = Path.Combine(baseDir, "TKVTransactionManager", "bin", "Debug", "net6.0", "TKVTransactionManager.exe");
-            var leaseManagerPath = Path.Combine(baseDir, "TKVLeaseManager", "bin", "Debug", "net6.0", "TKVLeaseManager.exe");
+            var clientPath = Path.Combine(baseDirectory, "TKVClient", "bin", "Debug", "net6.0", "TKVClient.exe");
+            var transactionManagerPath = Path.Combine(baseDirectory, "TKVTransactionManager", "bin", "Debug", "net6.0", "TKVTransactionManager.exe");
+            var leaseManagerPath = Path.Combine(baseDirectory, "TKVLeaseManager", "bin", "Debug", "net6.0", "TKVLeaseManager.exe");
 
             var id = configArgs[1];
-            var type = configArgs[2];
+            var processType = configArgs[2];
 
-            if (type.Equals("C"))
+            switch (processType)
             {
-                var script = configArgs[3];
-                Console.WriteLine("Starting client " + id + " with script " + script);
-                return StartProcess(clientPath, id + " " + script);
-            }
+                case "C":
+                    var script = configArgs[3];
+                    Console.WriteLine("Starting client " + id + " with script " + script);
+                    return StartProcess(clientPath, id + " " + script);
+                case "T":
+                case "L":
+                    var url = configArgs[3].Remove(0, 7);
+                    var host = url.Split(":")[0];
+                    var port = url.Split(":")[1];
 
-            else if (type.Equals("T") || type.Equals("L"))
-            {
-                var url = configArgs[3].Remove(0, 7);
-                var host = url.Split(":")[0];
-                var port = url.Split(":")[1];
+                    Console.WriteLine("Starting " + processType + " " + id + " at " + host + ":" + port);
 
-                Console.WriteLine("Starting " + type + " " + id + " at " + host + ":" + port);
-
-                if (type.Equals("T"))
-                {
-                    return StartProcess(transactionManagerPath, id + " " + host + " " + port);
-                }
-                else
-                {
-                    return StartProcess(leaseManagerPath, id + " " + host + " " + port);
-                }
-            }
-
-            else
-            {
-                throw new Exception("Invalid config file");
+                    if (processType.Equals("T"))
+                    {
+                        return StartProcess(transactionManagerPath, id + " " + host + " " + port);
+                    }
+                    else
+                    {
+                        return StartProcess(leaseManagerPath, id + " " + host + " " + port);
+                    }
+                default:
+                    throw new Exception("Invalid config file");
             }
         }
 
         static void Main()
         {
-            string baseDir = Common.GetSolutionDir();
-            var configPath = Path.Join(baseDir, "Launcher", "config.txt");
+            string baseDirectory = Common.GetSolutionDirectory();
+            var configPath = Path.Join(baseDirectory, "Launcher", "config.txt");
 
             if (!File.Exists(configPath))
             {
@@ -75,11 +71,9 @@ namespace Launcher
                 
                 if (configArgs[0].Equals("P"))
                 {
-                    CreateProcess(baseDir, configArgs);
+                    CreateProcess(baseDirectory, configArgs);
                 }
             }
         }
-
-
     }
 } 

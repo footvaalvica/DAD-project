@@ -8,7 +8,6 @@ namespace TKVTransactionManager.Services
     using LeaseManagers =
         Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient>;
 
-    // TODO why struct and not class?
     public struct TransactionState
     {
         public List<string> Leases { get; set; }
@@ -71,7 +70,6 @@ namespace TKVTransactionManager.Services
             _dadIntsRead = new List<DADInt>();
             _transactionsState = new List<TransactionState>();
         }
-        // TODO : etc...
 
         public void PrepareSlot()
         {
@@ -113,11 +111,14 @@ namespace TKVTransactionManager.Services
         // TODO why statusrequest not used? should be empty then!
         public StatusResponse Status(StatusRequest statusRequest)
         {
+            if (_isCrashed) { Monitor.Wait(this); }
             return new StatusResponse { Status = true };
         }
 
         public TransactionResponse TxSubmit(TransactionRequest transactionRequest)
         {
+            if (_isCrashed) { Monitor.Wait(this); }
+
             var leasesRequired = new List<string>();
             _dadIntsRead = new List<DADInt>(); // TODO ??
 

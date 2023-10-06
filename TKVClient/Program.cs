@@ -39,7 +39,6 @@ namespace TKVClient
                     try
                     {
                         StatusResponse statusResponse = tm.Value.Status(request);
-                        // TODO: primary???
                         if (statusResponse.Status)
                             Console.WriteLine($"Status: Transaction Manager with id ({tm.Key}) is alive!");
                     }
@@ -63,29 +62,34 @@ namespace TKVClient
             request.Reads.AddRange(reads);
             request.Writes.AddRange(writes);
 
-            // TODO: check if transaction manager is alive
-            // If it isn't, change index to next transaction manager
-
             int indexTM = config.Clients.IndexOf(id) % transactionManagers.Count;
             string tm = config.TransactionManagers[indexTM].Id;
 
             // send request to transaction manager
-            try
+            bool transactionSent = false;
+            while (!transactionSent)
             {
-                TransactionResponse response = transactionManagers[tm].TxSubmit(request);
-                if (response.Response != null)
+                try
                 {
-                    Console.WriteLine("Transaction successful!");
-                    return response.Response.Select(read => new DADInt { Key = read.Key, Value = read.Value }).ToList();
+                    TransactionResponse response = transactionManagers[tm].TxSubmit(request);
+                    if (response.Response != null)
+                    {
+                        Console.WriteLine("Transaction successful!");
+                        transactionSent = true;
+                        return response.Response.Select(read => new DADInt { Key = read.Key, Value = read.Value }).ToList();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Transaction failed!");
+                    }
                 }
-                else
+                catch (Grpc.Core.RpcException e)
                 {
-                    Console.WriteLine("Transaction failed!");
+                    Console.WriteLine(e.Status);
+                    indexTM = (++indexTM) % transactionManagers.Count;
+                    tm = config.TransactionManagers[indexTM].Id;
+                    Console.WriteLine($"TM is now {tm}");
                 }
-            }
-            catch (Grpc.Core.RpcException e)
-            {
-                Console.WriteLine(e.Status);
             }   
 
             return new List<DADInt>();
@@ -190,7 +194,7 @@ namespace TKVClient
                 return;
             }
             string processId = args[0];
-            string scriptName = args[1]; // TODO: place elsewhere?? launcher??
+            string scriptName = args[1];
             bool debug = args.Length > 2 && args[2].Equals("debug");
 
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
@@ -201,7 +205,7 @@ namespace TKVClient
                 Console.WriteLine("Error reading config file.");
                 return;
             }
-            // TODO: process config file
+
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
             // Process data from config file
@@ -212,7 +216,7 @@ namespace TKVClient
             });
 
             // Read client scripts
-            string baseDirectory = Common.GetSolutionDir();
+            string baseDirectory = Common.GetSolutionDirectory();
             string scriptFilePath = Path.Join(baseDirectory, "TKVClient", "Scripts", scriptName + ".txt");
             Console.WriteLine("Using script (" + scriptFilePath + ") for TKVClient.");
 
