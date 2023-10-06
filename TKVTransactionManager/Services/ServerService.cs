@@ -2,6 +2,7 @@
 using TransactionManagerLeaseManagerServiceProto;
 using ClientTransactionManagerProto;
 using Google.Protobuf.WellKnownTypes;
+using System.Transactions;
 
 namespace TKVTransactionManager.Services
 {
@@ -144,6 +145,7 @@ namespace TKVTransactionManager.Services
             transactionState.Leases = leasesRequired
                 .Where(lease => !_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(lease)))
                 .ToList();
+            _transactionsState.Add(transactionState);
 
             // TODO lease managers knowing about other projects' leases and stuffs (maybe)
 
@@ -213,59 +215,56 @@ namespace TKVTransactionManager.Services
             // if the lease is in conflict, this TM should release the Lease it holds. 
             foreach (var lease in statusUpdateResponse.Leases)
             {
-                var leaseRemoved = false;
                 // Check if the lease is held by another process (TM)
-                if (lease.Id != _processId) continue;
+                if (lease.Id == _processId)
+                {
+                    Console.WriteLine("     Adding new lease...");
+                    _leasesHeld.Add(lease);
+
+                    foreach (TransactionState tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))
+                    {
+                        tsState.Leases.RemoveAll(leasePerm => lease.Permissions.Contains(leasePerm));
+                    }
+                    continue;
+                }
+
                 // Iterate through leases held by the current process
                 foreach (var heldLease in _leasesHeld.ToList().Where(heldLease => lease.Permissions.Intersect(heldLease.Permissions).Any()))
                 {
                     // Remove conflicting lease
                     _leasesHeld.Remove(heldLease);
-                    leaseRemoved = true;
 
                     // Exit inner loop since a conflicting lease was removed
                     break;
                 }
-
-                Console.WriteLine("adding received lease");
-                _leasesHeld.Add(lease);
-
-                // Exit outer loop if a conflicting lease was removed // why?
-                ////if (leaseRemoved) { continue; }
-
-                foreach (TransactionState transactionState in _transactionsState.Where(_transactionsState => _transactionsState.Leases.Count > 0))
-                {
-                    transactionState.Leases.RemoveAll(leaseRequest => lease.Permissions.Contains(leaseRequest));
-                }
             }
+          
+            // not part of checkpoint
+            // // foreach (TransactionState transactionState in _transactionsState
+            // //     .Where(_transactionsState => _transactionsState.Leases.Count == 0))
+            // // {
+            // //     Console.WriteLine($"    Finally executing transaction...");
+            // //     foreach (var dadintKey in transactionState.Request.Reads)
+            // //     {
+            // //         if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
+            // //             _dadIntsRead.Add(dadint);
+            // //         else
+            // //         {
+            // //             Console.WriteLine("     Requested read on non-existing DADINT."); // TODO
+            // //         }
+            // //     }
 
-            // transaction execution
-            // not needed for this checkpoint
-            ////foreach (TransactionState transactionState in _transactionsState
-            ////    .Where(_transactionsState => _transactionsState.Leases.Count == 0))
-            ////{
-            ////    Console.WriteLine($"Lease granted!");
-            ////    foreach (var dadintKey in transactionState.Request.Reads)
-            ////    {
-            ////        if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
-            ////            _dadIntsRead.Add(dadint);
-            ////        else
-            ////        {
-            ////            Console.WriteLine("Requested read on non-existing DADINT."); // TODO
-            ////        }
-            ////    }
-
-            ////    foreach (var dadint in transactionState.Request.Writes)
-            ////    {
-            ////        if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
-            ////            j.Value = dadint.Value;
-            ////        else
-            ////        {
-            ////            Console.WriteLine("Requested write on non-existing DADINT."); // TODO
-            ////        }
-            ////    }
-            ////}
-            ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
+            // //     foreach (var dadint in transactionState.Request.Writes)
+            // //     {
+            // //         if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
+            // //             j.Value = dadint.Value;
+            // //         else
+            // //         {
+            // //             Console.WriteLine("     Requested write on non-existing DADINT (to be implemented)."); // TODO
+            // //         }
+            // //     }
+            // // }
+            // // _transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
 
             Monitor.Exit(this);
         }
