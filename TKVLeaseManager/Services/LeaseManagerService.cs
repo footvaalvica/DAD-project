@@ -274,7 +274,7 @@ namespace TKVLeaseManager.Services
             List<Task> tasks = new();
             foreach (var host in _leaseManagerHosts)
             {
-                if (host.Key == _processBook[leaderId % _leaseManagerHosts.Count]) continue; // TODO?
+                //if (host.Key == _processBook[leaderId % _leaseManagerHosts.Count]) continue; // TODO?
                 var t = Task.Run(() =>
                 {
                     try
@@ -315,7 +315,7 @@ namespace TKVLeaseManager.Services
 
             var acceptResponses = new List<AcceptedReply>();
 
-            var tasks = _leaseManagerHosts.Where(host => host.Key != _processBook[leaderId % _leaseManagerHosts.Count])
+            var tasks = _leaseManagerHosts/*.Where(host => host.Key != _processBook[leaderId % _leaseManagerHosts.Count])*/
                 .Select(host => Task.Run(() =>
                 {
                     Console.WriteLine("Sending accept request");
