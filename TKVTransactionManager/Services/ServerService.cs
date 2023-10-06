@@ -211,12 +211,11 @@ namespace TKVTransactionManager.Services
 
             // we are going to check for conflict leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
             // if the lease is in conflict, this TM should release the Lease it holds. 
-            bool leaseRemoved;
             foreach (var lease in statusUpdateResponse.Leases)
             {
-                leaseRemoved = false;
+                var leaseRemoved = false;
                 // Check if the lease is held by another process (TM)
-                if (lease.Id == _processId) continue;
+                if (lease.Id != _processId) continue;
                 // Iterate through leases held by the current process
                 foreach (var heldLease in _leasesHeld.ToList().Where(heldLease => lease.Permissions.Intersect(heldLease.Permissions).Any()))
                 {
@@ -228,10 +227,11 @@ namespace TKVTransactionManager.Services
                     break;
                 }
 
+                Console.WriteLine("adding received lease");
                 _leasesHeld.Add(lease);
 
                 // Exit outer loop if a conflicting lease was removed // why?
-                if (leaseRemoved) { continue; }
+                ////if (leaseRemoved) { continue; }
 
                 foreach (TransactionState transactionState in _transactionsState.Where(_transactionsState => _transactionsState.Leases.Count > 0))
                 {
