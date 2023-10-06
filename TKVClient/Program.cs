@@ -230,10 +230,10 @@ namespace TKVClient
             }
 
             // Wait for slots to start
-            //if (DateTime.Now.TimeOfDay < startTime) // TODO: change before submission
-            //{
-            //    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
-            //}
+            if (DateTime.Now.TimeOfDay < startTime)
+            {
+                System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
+            }
 
             foreach (string command in commands) { HandleCommand(command, processId, transactionManagers); }
 

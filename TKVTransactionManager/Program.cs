@@ -12,11 +12,10 @@ namespace TKVTransactionManager
     {
         static Timer timer;
 
-        // TODO: change this back before submitting
 
         static private void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
         {
-            TimeSpan timeToGo = TimeSpan.Zero; //  time - DateTime.Now.TimeOfDay; TODO: remove before submission
+            TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup.");

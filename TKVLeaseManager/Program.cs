@@ -12,7 +12,7 @@ namespace TKVLeaseManager
         static Timer timer;
         private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
         {
-            TimeSpan timeToGo = TimeSpan.Zero; //time - DateTime.Now.TimeOfDay; TODO: remove before submission
+            TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup.");
