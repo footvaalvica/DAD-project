@@ -1,9 +1,4 @@
-﻿﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.IO.Pipes;
-using System.Linq;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 namespace Utilities
 {
@@ -64,15 +59,14 @@ namespace Utilities
 
     public static class Common
     {
-        // TODO
-        public static string GetSolutionDir()
+        public static string GetSolutionDirectory()
         {
             return Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).Parent?.Parent?.Parent?.Parent?.FullName;
         }
 
         public static TKVConfig ReadConfig()
         {
-            string configPath = Path.Join(GetSolutionDir(), "Launcher", "config.txt");
+            string configPath = Path.Join(GetSolutionDirectory(), "Launcher", "config.txt");
             string[] commands;
             try {
                 commands = File.ReadAllLines(configPath); 
@@ -95,89 +89,82 @@ namespace Utilities
             {
                 string[] args = command.Split(" ");
 
-                if (args[0].Equals("P"))
+                switch (args[0])
                 {
-                    string processId = args[1];
-                    ProcessInfo processInfo;
-                    switch (args[2])
-                    {
-                        case "C":
-                            processInfo = new ProcessInfo(processId, args[2]);
-                            clients.Add(processId);
-                            break;
-                        case "T":
-                            processInfo = new ProcessInfo(processId, args[2], args[3]);
-                            transactionManagers.Add(processInfo);
-                            servers.Add(processInfo);
-                            break;
-                        case "L":
-                            processInfo = new ProcessInfo(processId, args[2], args[3]);
-                            leaseManagers.Add(processInfo);
-                            servers.Add(processInfo);
-                            break;
-                        default:
-                            Console.WriteLine("Invalid process type.");
-                            break;
-                    }
-                }
-
-                else if (args[0].Equals("T"))
-                {
-                    string[] time = args[1].Split(":");
-                    startTime = new TimeSpan(int.Parse(time[0]), int.Parse(time[1]), int.Parse(time[2]));
-                }
-
-                else if (args[0].Equals("D"))
-                {
-                    slotDuration = int.Parse(args[1]);
-                }
-
-                else if (args[0].Equals("S"))
-                {
-                    numberOfSlots = int.Parse(args[1]);
-                    processStates = new Dictionary<string, ProcessState>[numberOfSlots];
-                }
-
-                else if (args[0].Equals("F"))
-                {
-                    if (processStates == null)
-                    {
-                        // Haven't read the number of slots yet
-                        continue;
-                    }
-
-                    if (args.Length < 2 + servers.Count) { throw new Exception("Invalid config file."); }
-
-                    int slotId = int.Parse(args[1]);
-                    processStates[slotId - 1] = new Dictionary<string, ProcessState>();
-
-                    for (int i=0; i< servers.Count; i++)
-                    {
-                        switch (args[i+2])
+                    case "P":
+                        string processId = args[1];
+                        ProcessInfo processInfo;
+                        switch (args[2])
                         {
-                            case "N":
-                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(false, new List<string>()));
-                                break;
                             case "C":
-                                processStates[slotId - 1].Add(servers[i].Id, new ProcessState(true, new List<string>()));
+                                processInfo = new ProcessInfo(processId, args[2]);
+                                clients.Add(processId);
+                                break;
+                            case "T":
+                                processInfo = new ProcessInfo(processId, args[2], args[3]);
+                                transactionManagers.Add(processInfo);
+                                servers.Add(processInfo);
+                                break;
+                            case "L":
+                                processInfo = new ProcessInfo(processId, args[2], args[3]);
+                                leaseManagers.Add(processInfo);
+                                servers.Add(processInfo);
                                 break;
                             default:
-                                throw new Exception("Invalid config file.");
+                                Console.WriteLine("Invalid process type.");
+                                break;
                         }
-                    }
+                        break;
+                    case "T":
+                        string[] time = args[1].Split(":");
+                        startTime = new TimeSpan(int.Parse(time[0]), int.Parse(time[1]), int.Parse(time[2]));
+                        break;
+                    case "D":
+                        slotDuration = int.Parse(args[1]);
+                        break;
+                    case "S":
+                        numberOfSlots = int.Parse(args[1]);
+                        processStates = new Dictionary<string, ProcessState>[numberOfSlots];
+                        break;
+                    case "F":
+                        if (processStates == null)
+                        {
+                            // Haven't read the number of slots yet
+                            continue;
+                        }
 
-                    Regex rg = new Regex(@"\(([^,]+,[^)]+)\)");
-                    MatchCollection matched = rg.Matches(command);
-                    foreach (Match match in matched.Cast<Match>())
-                    {
-                        string[] values = match.Groups[1].Value.Split(",");
-                        processStates[slotId - 1].TryGetValue(values[0], out ProcessState state);
-                        state.Suspects.Add(values[1]);
-                    }
+                        if (args.Length < 2 + servers.Count) { throw new Exception("Invalid config file."); }
+
+                        int slotId = int.Parse(args[1]);
+                        processStates[slotId - 1] = new Dictionary<string, ProcessState>();
+
+                        for (int i = 0; i < servers.Count; i++)
+                        {
+                            switch (args[i + 2])
+                            {
+                                case "N":
+                                    processStates[slotId - 1].Add(servers[i].Id, new ProcessState(false, new List<string>()));
+                                    break;
+                                case "C":
+                                    processStates[slotId - 1].Add(servers[i].Id, new ProcessState(true, new List<string>()));
+                                    break;
+                                default:
+                                    throw new Exception("Invalid config file.");
+                            }
+                        }
+
+                        Regex rg = new Regex(@"\(([^,]+,[^)]+)\)");
+                        MatchCollection matched = rg.Matches(command);
+                        foreach (Match match in matched.Cast<Match>())
+                        {
+                            string[] values = match.Groups[1].Value.Split(",");
+                            processStates[slotId - 1].TryGetValue(values[0], out ProcessState state);
+                            state.Suspects.Add(values[1]);
+                        }
+                        break;
                 }
             }
             return new TKVConfig(clients, transactionManagers, leaseManagers, transactionManagers.Count + leaseManagers.Count, slotDuration, startTime, processStates);
         }
     }
-
 }

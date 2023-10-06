@@ -1,7 +1,5 @@
 // TODO!
 
-using LeaseManagerLeaseManagerServiceProto;
-
 namespace TKVLeaseManager.Domain
 {
     public class SlotData
@@ -13,34 +11,25 @@ namespace TKVLeaseManager.Domain
         {
             this.Slot = slot;
             this.IsPaxosRunning = false;
-            this.DecidedValue = new Lease
-            {
-                Id = "-1",
-                Permissions = {  }
-            };
-            this.WrittenValue = new Lease
-            {
-                Id = "-1",
-                Permissions = {  }
-            };
+            this.DecidedValues = new List<Lease>();
+            this.WrittenValues = new List<Lease>();
             this.ReadTimestamp = -1;
             this.WriteTimestamp = -1;
-            
-            this.DecidedReceived = new List<(int, Lease)>();
+            this.DecidedReceived = new List<(int, List<Lease>)>();
         }
 
         public int Slot { get; set; }
         
         public bool IsPaxosRunning { get; set; }
 
-        public Lease DecidedValue { get; set; }
+        public List<Lease> DecidedValues { get; set; }
 
         public int ReadTimestamp { get; set; }
 
         public int WriteTimestamp { get; set; }
 
-        public Lease WrittenValue { get; set; }
+        public List<Lease> WrittenValues { get; set; }
 
-        public List<(int, Lease)> DecidedReceived { get; set; }
+        public List<(int, List<Lease>)> DecidedReceived { get; set; }
     }
 }

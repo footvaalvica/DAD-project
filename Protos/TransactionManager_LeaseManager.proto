@@ -3,33 +3,19 @@ syntax = "proto3";
 package TransactionManager_LeaseManagerServiceProto;
 
 import "LeaseType.proto";
+import "google/protobuf/empty.proto";
 
 message LeaseRequest {
-	Lease lease = 1;
-	// int32 number = 2;
+	int32 slot = 1;
+	Lease lease = 2;
 }
 
-message LeaseResponse {
+message StatusUpdateResponse {
 	int32 slot = 1;
-	bool status = 2;
-	// int32 number = 3;
+	repeated Lease leases = 2;
 }
 
 service TransactionManager_LeaseManagerService {
-	rpc Lease(LeaseRequest) returns (LeaseResponse);
-}
-
-// TODO: check whats relevant/needed
-
-message CompareAndSwapRequest {
-	int32 slot = 1;
-	int32 invalue = 2;
-}
-message CompareAndSwapReply {
-	int32 slot = 1;
-	int32 outvalue = 2;
-}
-
-service CompareAndSwap {
-  rpc CompareAndSwap(CompareAndSwapRequest) returns (CompareAndSwapReply);
+	rpc Lease(LeaseRequest) returns (google.protobuf.Empty);
+	rpc StatusUpdate(google.protobuf.Empty) returns (StatusUpdateResponse);
 }

@@ -3,17 +3,11 @@ syntax = "proto3";
 package TransactionManager_TransactionManagerProto;
 // TODO : remove/change/add stuff
 
-enum Type {
-	DEPOSIT = 0;
-	WITHDRAW = 1;
-}
-
 message Command {
 	int32 slot = 1;
 	int32 clientId = 2;
 	int32 clientSequenceNumber = 3;
 	int32 sequenceNumber = 4;
-	Type type = 5;
 	string value = 6;
 }
 
@@ -32,6 +26,9 @@ message CommitRequest {
 message CommitReply {
 }
 
+
+// wtf is this
+// wtf is this
 message ListPendingRequestsRequest {
 	int32 lastKnownSequenceNumber = 1;
 }

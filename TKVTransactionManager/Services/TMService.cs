@@ -1,6 +1,4 @@
 using Grpc.Core;
-using System.Threading.Tasks;
-using TKVTransactionManager.Services;
 using ClientTransactionManagerProto;
 
 namespace TKVTransactionManager.Services
@@ -13,7 +11,6 @@ namespace TKVTransactionManager.Services
         {
             this.serverService = serverService;
         }
-
         public override Task<StatusResponse> Status(StatusRequest request, ServerCallContext context)
         {
             return Task.FromResult(serverService.Status(request));

@@ -3,7 +3,8 @@ using TKVLeaseManager.Domain;
 using TransactionManagerLeaseManagerServiceProto;
 using LeaseManagerLeaseManagerServiceProto;
 using Utilities;
-using System.Runtime.Serialization.Formatters;
+using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 
 namespace TKVLeaseManager.Services
 {
@@ -25,6 +26,7 @@ namespace TKVLeaseManager.Services
         // TODO change this to a list
         private readonly ConcurrentDictionary<int, SlotData> _slots;
         private string? _leader = null; // TODO
+        private List<LeaseRequest> _bufferLeaseRequests = new();
 
         public LeaseManagerService(
             int processId,
@@ -47,10 +49,10 @@ namespace TKVLeaseManager.Services
 
             _processBook = processBook;
             _statePerSlot = statePerSlot;
-            _slots = new();
+            _slots = new ConcurrentDictionary<int, SlotData>();
             // Initialize slots
             for (var i = 1; i <= statePerSlot.Count; i++)
-                _slots.TryAdd(i, new(i));
+                _slots.TryAdd(i, new SlotData(i));
         }
 
         /*
@@ -66,15 +68,26 @@ namespace TKVLeaseManager.Services
             ////    Console.WriteLine("Slot duration ended but no more slots to process.");
             ////    return;
             ////}
+            
+            // TODO should not process if previous slot was running still? prolly wait a bit
 
             Console.WriteLine("Preparing new slot -----------------------");
 
+            Console.WriteLine($"Have ({_bufferLeaseRequests.Count}) requests to process for this slot");
             // Switch process state
             ////_isFrozen = _processFrozenPerSlot[_currentSlot];
+
             if (_currentSlot > 0)
+            {
                 _slots[_currentSlot].IsPaxosRunning = false;
-            Monitor.PulseAll(this);
+            }
+
+            ////Monitor.PulseAll(this);
             ////Console.WriteLine($"Process is now {(_isFrozen ? "frozen" : "normal")} for slot {_currentSlot+1}");
+
+            Monitor.Exit(this);
+            DoPaxosSlot();
+            Monitor.Enter(this);
 
             _currentSlot += 1;
 
@@ -101,7 +114,7 @@ namespace TKVLeaseManager.Services
             Console.WriteLine($"({request.Slot})    Received Prepare({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]})");
 
             var slot = _slots[request.Slot];
-  
+
             if (slot.ReadTimestamp < request.LeaderId)
                 slot.ReadTimestamp = request.LeaderId;
 
@@ -109,11 +122,11 @@ namespace TKVLeaseManager.Services
             {
                 Slot = request.Slot,
                 ReadTimestamp = slot.ReadTimestamp,
-                Lease = slot.WrittenValue,
             };
+            reply.Leases.AddRange(slot.WrittenValues);
 
             Console.WriteLine($"({request.Slot})    Received Prepare({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]})");
-            Console.WriteLine($"({request.Slot})        Answered Promise({slot.ReadTimestamp},{slot.WrittenValue})");
+            Console.WriteLine($"({request.Slot})        Answered Promise({slot.ReadTimestamp},{slot.WrittenValues})");
 
             Monitor.Exit(this);
             return reply;
@@ -129,25 +142,28 @@ namespace TKVLeaseManager.Services
 
             var slot = _slots[request.Slot];
 
-            Console.WriteLine($"({request.Slot})    Received Accept({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]}, {request.Lease})");
+            Console.WriteLine($"({request.Slot})    Received Accept({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]}, {request.Leases})");
 
             if (slot.ReadTimestamp == request.LeaderId)
             {
                 slot.WriteTimestamp = request.LeaderId;
-                slot.WrittenValue = request.Lease;
-
                 // Acceptors send the information to Learners
-                SendDecideRequest(slot.Slot, slot.WriteTimestamp, request.Lease);
+                Console.WriteLine("going to send");
+                Monitor.Exit(this);
+                SendDecideRequest(slot.Slot, slot.WriteTimestamp, request.Leases);
+                Monitor.Enter(this);
+                Console.WriteLine("sent");
             }
+            slot.WrittenValues.AddRange(request.Leases);
 
-            Console.WriteLine($"({request.Slot})        Answered Accepted({slot.WriteTimestamp},{slot.WrittenValue})");
+            Console.WriteLine($"({request.Slot})        Answered Accepted({slot.WriteTimestamp},{slot.WrittenValues})");
 
             var reply = new AcceptedReply
             {
                 Slot = request.Slot,
                 WriteTimestamp = slot.WriteTimestamp,
-                Lease = slot.WrittenValue,
             };
+            reply.Leases.AddRange(slot.WrittenValues);
 
             Monitor.Exit(this);
             return reply;
@@ -163,15 +179,18 @@ namespace TKVLeaseManager.Services
 
             var slot = _slots[request.Slot];
 
-            Console.WriteLine($"({request.Slot})    Received Decide({request.WriteTimestamp},{request.Lease})");
+            Console.WriteLine($"({request.Slot})    Received Decide({request.WriteTimestamp},{request.Leases})");
 
             // Learners keep track of all decided values to check for a majority
-            slot.DecidedReceived.Add((request.WriteTimestamp, request.Lease));
+            var decidedValue = (request.WriteTimestamp, request.Leases.ToList());
+
+            // TODO FUCK
+            slot.DecidedReceived.Add(decidedValue);
 
             var majority = _leaseManagerHosts.Count / 2 + 1;
 
             // Create a dictionary to count the number of times a request appears
-            var receivedRequests = new Dictionary<(int, Lease), int>();
+            var receivedRequests = new Dictionary<(int, List<Lease>), int>();
             foreach (var entry in slot.DecidedReceived)
             {
                 if (receivedRequests.ContainsKey(entry))
@@ -179,19 +198,31 @@ namespace TKVLeaseManager.Services
                 else
                     receivedRequests.Add(entry, 1);
             }
-            
+
             // If a request appears more times than the majority value, it's the decided value
             foreach (var requestFrequency in receivedRequests)
             {
+                Console.WriteLine("if a request appears more times");
                 if (requestFrequency.Value < majority) continue;
-                slot.DecidedValue = requestFrequency.Key.Item2;
+                slot.DecidedValues = requestFrequency.Key.Item2;
                 slot.IsPaxosRunning = false;
                 Monitor.PulseAll(this);
             }
 
             Console.WriteLine($"({request.Slot})        Answered Decided()");
+
+            Console.WriteLine($"Removing requests from buffer");
+            foreach (Lease lease in request.Leases)
+            {
+                // Remove Lease request that contains this lease if the request is in the buffer
+                _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => leaseRequest.Lease.Equals(lease)).ToList(); // TODO: not very concurrency friendly
+            }
+            Console.WriteLine("removed leases");
+
+            Monitor.PulseAll(this);
+
             Monitor.Exit(this);
-            return new()
+            return new DecideReply
             {
             };
         }
@@ -235,20 +266,24 @@ namespace TKVLeaseManager.Services
             }
 
             for (var i = 0; i < _leaseManagerHosts.Count / 2 + 1; i++)
+            {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+            }
+
+            Console.WriteLine("got majority promises!");
 
             return promiseResponses;
         }
 
-        public List<AcceptedReply> SendAcceptRequest(int slot, int leaderId, Lease lease)
+        public List<AcceptedReply> SendAcceptRequest(int slot, int leaderId, List<Lease> lease)
         {
             var acceptRequest = new AcceptRequest
             {
                 Slot = slot,
                 LeaderId = leaderId,
-                Lease = lease
             };
-            
+            acceptRequest.Leases.AddRange(lease);
+
             Console.WriteLine($"({slot}) Sending Accept({leaderId % _leaseManagerHosts.Count},{lease})");
 
             var acceptResponses = new List<AcceptedReply>();
@@ -278,75 +313,87 @@ namespace TKVLeaseManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
-            Console.WriteLine("Got it");
+            Console.WriteLine("got majority accepts!");
             return acceptResponses;
         }
 
-        public void SendDecideRequest(int slot, int writeTimestamp, Lease lease)
+        public void SendDecideRequest(int slot, int writeTimestamp, RepeatedField<Lease> lease)
         {
-
             var decideRequest = new DecideRequest
             {
                 Slot = slot,
                 WriteTimestamp = writeTimestamp,
-                Lease = lease
             };
+            decideRequest.Leases.AddRange(lease);
 
             Console.WriteLine($"({slot}) Sending Decide({writeTimestamp},{lease})");
-
-            foreach (var t in _leaseManagerHosts.Select(host => Task.Run(() =>
-                     {
-                         try
-                         {
-                             var decideReply = host.Value.Decide(decideRequest);
-                         }
-                         catch (Grpc.Core.RpcException e)
-                         {
-                             Console.WriteLine(e.Status);
-                         }
-                         return Task.CompletedTask;
-                     })))
+            foreach (var t in _leaseManagerHosts.Where(host => host.Key != _processName).Select(host => Task.Run(() =>
+            {
+                try
+                {
+                    host.Value.Decide(decideRequest);
+                }
+                catch (Grpc.Core.RpcException e)
+                {
+                    Console.WriteLine(e.Status);
+                }
+                Console.WriteLine($"Successfuly sent decide request to ({host.Key})");
+                return Task.CompletedTask;
+            })))
             {
             }
 
             // Don't need to wait for majority
+            Console.WriteLine("decide sent");
         }
-        
+
         public bool WaitForPaxos(SlotData slot)
         {
             Monitor.Enter(this);
             var success = true;
-            Monitor.Wait(this);
-            Console.WriteLine($"Paxos Running?: {(slot.IsPaxosRunning ? "true" : "false")}");
+            Console.WriteLine("waiting for paxos");
             while (slot.IsPaxosRunning)
             {
+                Monitor.Wait(this); // TODO why was this moved and why does it completely change things
+
+                Console.WriteLine($"ALKAAAAAAAAAAAAAAAAAaa {(slot.IsPaxosRunning ? "true" : "false")}");
+                Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(!slot.DecidedValues.Except(new List<Lease>()).Any() ? "true" : "false")})");
                 // Slot ended without reaching consensus
                 // Do paxos again with another configuration
-                Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(slot.DecidedValue.Equals(new() { Id = "-1", Permissions = { } }) ? "true" : "false")})");
-                if (_currentSlot <= slot.Slot && !slot.DecidedValue.Equals(new() { Id = "-1", Permissions = {  }})) continue;
-                Console.WriteLine($"Slot {slot.Slot} ended without consensus, starting a new paxos slot in slot {_currentSlot}.");
-                success = false;
-                break;
+                if (_currentSlot > slot.Slot && !slot.DecidedValues.Except(new List<Lease>()).Any())
+                {
+                    Console.WriteLine(
+                        $"Slot {slot.Slot} ended without consensus, starting a new paxos slot in slot {_currentSlot}.");
+                    success = false;
+                    break;
+                }
+                Console.WriteLine("Paxos was sucessful!: + " + success);
             }
-            Console.WriteLine("Paxos was sucessful!: + " + success);
             Monitor.Exit(this);
             return success;
         }
 
-        public bool DoPaxosSlot(LeaseRequest request)
+        public bool DoPaxosSlot()
         {
-            Monitor.Enter(this);
-            _bufferRequests.Add(request);
+            ////Monitor.Enter(this);
+
+            if (_bufferLeaseRequests.Count == 0)
+            {
+                Console.WriteLine("no lease requests to process");
+                return true;
+            }
+
             var slot = _slots[_currentSlot];
 
             // If paxos isn't running and a value hasn't been decided, start paxos
-            if (!slot.IsPaxosRunning && slot.DecidedValue.Equals(new() { Id = "-1", Permissions = { } }))
+            if (!slot.IsPaxosRunning && slot.DecidedValues.SequenceEqual(new List<Lease>()))
             {
+                Console.WriteLine("Paxos starting");
                 slot.IsPaxosRunning = true;
-            } else if (!slot.IsPaxosRunning)
+            }
+            else if (!slot.IsPaxosRunning)
             {
                 Console.WriteLine("Paxos is not running and a value has been decided");
-                Monitor.Exit(this);
                 return true;
             }
 
@@ -375,7 +422,6 @@ namespace TKVLeaseManager.Services
             if (_processId % _leaseManagerHosts.Count != leader)
             {
                 Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
-                Monitor.Exit(this);
                 return WaitForPaxos(slot);
             }
 
@@ -397,73 +443,88 @@ namespace TKVLeaseManager.Services
             // Save processId for current paxos slot
             // Otherwise it might change in the middle of paxos if a new slot begins
             var leaderCurrentId = _processId;
-            
+
             // 'leader' comes from config, doesn't account for increase in processId
             ////if (_processId % _leaseManagerHosts.Count != leader)
             ////{
             ////    return WaitForPaxos(slot, request);
             ////}
 
-            Monitor.Exit(this);
             // Send prepare to all acceptors
             List<PromiseReply> promiseResponses = SendPrepareRequest(_currentSlot, leaderCurrentId);
-            
-            Monitor.Enter(this);
+
+            ////Monitor.Enter(this);
             // Stop being leader if there is a more recent one
-            //get the last char of _processId
+            //get the last char of _processId // TODO: sus
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > _processId)
                 {
-                    Monitor.Exit(this);
+                    Console.WriteLine($"I'm not the leader anymore, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
                     return WaitForPaxos(slot);
                 }
             }
 
             // Get values from promises
             var mostRecent = -1;
-            var valueToPropose = new Lease() { Id = "-1", Permissions = {  }};
+            var valueToPropose = new List<Lease>();
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > mostRecent)
                 {
                     mostRecent = response.ReadTimestamp;
-                    valueToPropose = response.Lease;
+                    valueToPropose = response.Leases.ToList();
                 }
             }
 
             // If acceptors have no value, send own value
-            if (valueToPropose.Equals(new() { Id = "-1", Permissions = { } }))
-                valueToPropose = request.Lease;
-            
-            Monitor.Exit(this);
+            if (!valueToPropose.Except(new List<Lease>()).Any())
+            {
+                int size = _bufferLeaseRequests.Count;
+                for (int i = 0; i < size; i++)
+                {
+                    valueToPropose.Add(_bufferLeaseRequests[i].Lease); // i->0
+                    //_bufferLeaseRequests.RemoveAt(0);
+                }
+                //foreach (LeaseRequest request in _bufferLeaseRequests) // note: foreach might be bad cause if size of buffer changes then it implodes :skull:
+                //{
+                //    valueToPropose.Add(request.Lease);
+                //}
+            }
+
+            ////Monitor.Exit(this);
             // Send accept to all acceptors which will send decide to all learners
             SendAcceptRequest(_currentSlot, leaderCurrentId, valueToPropose);
-
+            Console.WriteLine($"Paxos slot in slot {_currentSlot} for slot {_currentSlot} IS BALLS");
             // Wait for learners to decide
-            return WaitForPaxos(slot);
+            var retVal = WaitForPaxos(slot);
+            return retVal;
         }
 
-        public LeaseResponse LeaseRequest(LeaseRequest request)
+        public StatusUpdateResponse StatusUpdate()
         {
             Monitor.Enter(this);
 
-            SlotData slot = _slots[_currentSlot]; // TODO
+            var slot = _currentSlot > 1 ? _slots[_currentSlot - 1] : _slots[_currentSlot];
 
-            DoPaxosSlot(request);
+            // TODO should wait for Paxos of the previous slot to finish before replying
 
-            // if this is buggy, line used to be
-            ////while (!DoPaxosSlot(request))
-            ////{
-            ////}
-
-            _bufferRequests.Remove(request);
             Monitor.Exit(this);
-            return new()
+            return new StatusUpdateResponse
             {
                 Slot = slot.Slot,
-                Status = slot.DecidedValue.Equals(request.Lease)
+                Leases = { slot.DecidedValues }
             };
+        }
+
+        public Empty LeaseRequest(LeaseRequest request)
+        {
+            Monitor.Enter(this);
+
+            _bufferLeaseRequests.Add(request);
+
+            Monitor.Exit(this);
+            return new Empty();
         }
     }
 }

@@ -1,6 +1,4 @@
-﻿using Grpc.Core;
-using System.Threading.Tasks;
-using TransactionManagerTransactionManagerProto; // TODO: why this necessary :thinking:
+﻿using TransactionManagerTransactionManagerProto; // TODO: why this necessary :thinking:
 
 namespace TKVTransactionManager.Services
 {
