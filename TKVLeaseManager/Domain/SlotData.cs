@@ -1,11 +1,8 @@
-// TODO!
-
 namespace TKVLeaseManager.Domain
 {
     public class SlotData
     {
-        // Learners keep a list of decided values to know when a majority was
-        // achieved and reply to the client with the final value
+        // Learners keep a list of decided values to know when a majority was achieved and reply to the client with the final value
 
         public SlotData(int slot)
         {

@@ -1,4 +1,4 @@
-﻿using TransactionManagerTransactionManagerProto; // TODO: why this necessary :thinking:
+﻿using TransactionManagerTransactionManagerProto;
 
 namespace TKVTransactionManager.Services
 {

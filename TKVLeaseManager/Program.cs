@@ -9,10 +9,10 @@ namespace TKVLeaseManager
 {
     internal class Program
     {
-        static System.Threading.Timer timer;
+        static Timer timer;
         private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
         {
-            TimeSpan timeToGo = TimeSpan.Zero; /*time - DateTime.Now.TimeOfDay;*/ // TODO: remove before submission
+            TimeSpan timeToGo = TimeSpan.Zero; //time - DateTime.Now.TimeOfDay; TODO: remove before submission
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup.");
@@ -48,7 +48,7 @@ namespace TKVLeaseManager
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))
             );
 
-            List<List<ProcessState>> statePerSlot = new(); // Lista de states de todos os leaseManagers por slot
+            List<List<ProcessState>> statePerSlot = new(); // LeaseManagers' state per slot
             foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
                 if (dict != null)
@@ -58,17 +58,9 @@ namespace TKVLeaseManager
                 }
                 else
                 {
-                    statePerSlot.Add(statePerSlot.Last()); // Podia deixar so a null
+                    statePerSlot.Add(statePerSlot.Last());
                 }
             }
-
-            ////var processesSuspectedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Suspects).ToList();
-            ////var processCrashedPerSlot = config.ProcessStates.Select(states => states[processId.ToString()].Crashed).ToList();
-
-
-            ////A process should not suspect itself(it knows if its Crashed or not)
-            ////for (var i = 0; i < processesSuspectedPerSlot.Count; i++)
-            ////    processesSuspectedPerSlot[i][processId.ToString()] = processCrashedPerSlot[i];
 
             int processIndex = config.LeaseManagers.FindIndex(x => x.Id == processId);
             List<string> processBook = config.LeaseManagers.Select(x => x.Id).ToList();
@@ -95,7 +87,7 @@ namespace TKVLeaseManager
             Console.WriteLine("Press any key to stop the server...");
             Console.ReadKey();
 
-            server.ShutdownAsync().Wait(); // why was this commented out?
+            server.ShutdownAsync().Wait();
         }
     }
 }

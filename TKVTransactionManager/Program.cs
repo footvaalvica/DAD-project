@@ -10,13 +10,13 @@ namespace TKVTransactionManager
 {
     internal class Program
     {
-        static System.Threading.Timer timer;
+        static Timer timer;
 
         // TODO: change this back before submitting
 
         static private void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
         {
-            TimeSpan timeToGo = TimeSpan.Zero; //  time - DateTime.Now.TimeOfDay; // TODO: remove before submission
+            TimeSpan timeToGo = TimeSpan.Zero; //  time - DateTime.Now.TimeOfDay; TODO: remove before submission
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup.");
@@ -54,18 +54,18 @@ namespace TKVTransactionManager
             int numberOfProcesses = config.NumberOfProcesses;
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
-            // TransactionM <-> TransactionM
+            // TransactionManager <-> TransactionManager 
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers = config.TransactionManagers.ToDictionary(
                 key => key.Id,
                 value => new TwoPhaseCommit.TwoPhaseCommitClient(GrpcChannel.ForAddress(value.Url))
             );
-            // TransactionM <-> LeaseM
+            // TransactionManager  <-> LeaseManager 
             Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers = config.LeaseManagers.ToDictionary(
                 key => key.Id,
                 value => new TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient(GrpcChannel.ForAddress(value.Url))
             );
 
-            List<ProcessState> statePerSlot = new List<ProcessState>(); // Podia so ir buscar sempre ao dictionary ig
+            List<ProcessState> statePerSlot = new List<ProcessState>();
             foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
                 if (dict != null)
@@ -75,7 +75,7 @@ namespace TKVTransactionManager
                 }
                 else
                 {
-                    statePerSlot.Add(statePerSlot.Last()); // Podia deixar so a null
+                    statePerSlot.Add(statePerSlot.Last());
                 }
             }
 
@@ -107,7 +107,7 @@ namespace TKVTransactionManager
             }
             int processIndex = config.TransactionManagers.FindIndex(x => x.Id == processId);
 
-            ServerService serverService = new(processId, transactionManagers, leaseManagers, tmsStatePerSlot, tmsSuspectedPerSlot, processIndex); // processCrashedPerSlot, processesSuspectedPerSlot, 
+            ServerService serverService = new(processId, transactionManagers, leaseManagers, tmsStatePerSlot, tmsSuspectedPerSlot, processIndex);
 
             Server server = new Server
             {
@@ -122,7 +122,7 @@ namespace TKVTransactionManager
 
             Console.WriteLine($"Transaction Manager with id ({processId}) listening on port {port}");
             Console.WriteLine($"First slot starts at {startTime} with intervals of {slotDuration} ms");
-            Console.WriteLine($"Working with {transactionManagers.Count} TMs"); //  and {leaseManagers.Count} boney processes
+            Console.WriteLine($"Working with {transactionManagers.Count} TMs");
 
             // Starts a new thread for each slot
             SetSlotTimer(startTime, slotDuration, serverService);

@@ -93,6 +93,7 @@ namespace TKVLeaseManager.Services
 
             // Switch process state
             _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
+            // _processId % _leaseManagerHosts.Count -> since we increment processId every slot, we need to do this operation to guarantee that the index is always between 0 and #LMs - 1
             Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}");
 
             if (_currentSlot > 0)
@@ -165,11 +166,9 @@ namespace TKVLeaseManager.Services
             {
                 slot.WriteTimestamp = request.LeaderId;
                 // Acceptors send the information to Learners
-                Console.WriteLine("going to send");
                 Monitor.Exit(this);
                 SendDecideRequest(slot.Slot, slot.WriteTimestamp, request.Leases);
                 Monitor.Enter(this);
-                Console.WriteLine("sent");
             }
             slot.WrittenValues.AddRange(request.Leases);
 
@@ -288,7 +287,6 @@ namespace TKVLeaseManager.Services
                     return Task.CompletedTask;
                 });
                 tasks.Add(t);
-                Console.WriteLine("Sent prepare request");
             }
 
             for (var i = 0; i < _leaseManagerHosts.Count / 2 + 1; i++)
@@ -296,7 +294,7 @@ namespace TKVLeaseManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
-            Console.WriteLine("got majority promise responses");
+            Console.WriteLine("Got majority promise responses");
 
             return promiseResponses;
         }
@@ -325,7 +323,6 @@ namespace TKVLeaseManager.Services
                 && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
                 {
-                    Console.WriteLine("Sending accept request");
                     try
                     {
                         var acceptedReply = host.Value.Accept(acceptRequest);
@@ -348,7 +345,7 @@ namespace TKVLeaseManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
-            Console.WriteLine("got majority accepts!");
+            Console.WriteLine("Got majority accepts!");
             return acceptResponses;
         }
 
@@ -388,14 +385,14 @@ namespace TKVLeaseManager.Services
             }
 
             // Don't need to wait for majority
-            Console.WriteLine("decide sent");
+            Console.WriteLine("Decide sent");
         }
 
         public bool WaitForPaxos(SlotData slot)
         {
             Monitor.Enter(this);
             var success = true;
-            Console.WriteLine("waiting for paxos");
+            Console.WriteLine("Waiting for paxos...");
             while (slot.IsPaxosRunning)
             {
                 Monitor.Wait(this);
@@ -410,7 +407,7 @@ namespace TKVLeaseManager.Services
                     break;
                 }
             }
-            Console.WriteLine("Paxos was sucessful!: + " + success);
+            Console.WriteLine("Paxos was sucessful?: " + success);
             Monitor.Exit(this);
             return success;
         }
@@ -421,7 +418,7 @@ namespace TKVLeaseManager.Services
 
             if (_bufferLeaseRequests.Count == 0)
             {
-                Console.WriteLine("no lease requests to process");
+                Console.WriteLine("No lease requests to process");
                 return true;
             }
 

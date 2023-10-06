@@ -17,7 +17,7 @@ namespace TKVClient
                 if (command.Length == 2)
                 {
                     Console.WriteLine("Waiting for " + command[1] + " milliseconds...");
-                    System.Threading.Thread.Sleep(int.Parse(command[1]));
+                    Thread.Sleep(int.Parse(command[1]));
                 }
                 else { Console.WriteLine("No time amount provided for wait."); }
             }
@@ -85,6 +85,7 @@ namespace TKVClient
                 }
                 catch (Grpc.Core.RpcException e)
                 {
+                    // if TM is crashed, then submit transaction request to the next TM
                     Console.WriteLine(e.Status);
                     indexTM = (++indexTM) % transactionManagers.Count;
                     tm = config.TransactionManagers[indexTM].Id;
@@ -233,8 +234,6 @@ namespace TKVClient
             //{
             //    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
             //}
-
-            int clientTimestamp = 0;
 
             foreach (string command in commands) { HandleCommand(command, processId, transactionManagers); }
 
