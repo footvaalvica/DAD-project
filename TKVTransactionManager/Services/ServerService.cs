@@ -238,7 +238,7 @@ namespace TKVTransactionManager.Services
                     break;
                 }
             }
-
+          
             // not part of checkpoint
             // // foreach (TransactionState transactionState in _transactionsState
             // //     .Where(_transactionsState => _transactionsState.Leases.Count == 0))
