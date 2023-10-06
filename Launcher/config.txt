@@ -31,7 +31,7 @@ P client1 C tkvclient_1_2
 S 100
 #
 # this test starts at 12:10:15 (physical wall time)
-T 12:10:15
+T 22:06:00
 #
 # Each time slots lasts 10000 miliseconds
 D 10000 

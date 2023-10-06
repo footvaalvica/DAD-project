@@ -1,0 +1,17 @@
+## Funcionalidades implementadas:
+
+- Processos lêm a config e inicializam-se corretamente
+- Launcher de processos
+- Comandos do cliente implementados à exceção do Status, que ainda está por completar
+- Servers identificam-se como Crashed/Normal (podem estar a faltar condições para bloquear o processo) e suspeitam de outros processos (de momento apenas nos LeaseManagers)
+- Clientes a enviar pedidos a TMs, TMs a enviar pedidos a LMs, TMs a receber leases de LMs
+- Paxos funcional, pode dar erro em certos casos por falta de funcionalidade ou erro nosso
+- LeaseManagers lidam com outros crasharem e suspeitas próprias, escolhendo um lider correto (eleiçao de lider devia ser alterada ligeiramente para guardarmos o lider entre slots)
+
+## Funcionalidades em falta:
+
+- Comando Status do cliente totalmente implementado
+- Propagação de transaçoes entre transaction managers
+- Execução de transações nos transaction managers
+- Respostas dos TMs aos pedidos dos clientes
+- Comando no launcher para fechar todos os processos ao mesmo tempo
