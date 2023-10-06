@@ -47,16 +47,13 @@ namespace TKVLeaseManager.Services
         private int _currentSlot;
         private readonly List<List<ProcessState>> _statePerSlot;
         private readonly List<string> _processBook;
-        // TODO change this to a list
         private readonly ConcurrentDictionary<int, SlotData> _slots;
-        private string? _leader = null; // TODO
+        private string? _leader = null; // TO CHECK AFTER CHECKPOINT
         private List<LeaseRequest> _bufferLeaseRequests = new();
 
         public LeaseManagerService(
             int processId,
             string processName,
-            ////List<bool> processFrozenPerSlot,
-            ////List<Dictionary<string, List<String>>> processesSuspectedPerSlot,
             List<string> processBook,
             List<List<ProcessState>> statePerSlot,
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts
@@ -65,9 +62,6 @@ namespace TKVLeaseManager.Services
             _processName = processName;
             _processId = processId;
             _leaseManagerHosts = leaseManagerHosts;
-            ////_processFrozenPerSlot = processFrozenPerSlot;
-            ////_processesSuspectedPerSlot = processesSuspectedPerSlot;
-
             _currentSlot = 0;
             _isCrashed = false;
 
@@ -87,19 +81,20 @@ namespace TKVLeaseManager.Services
         public void PrepareSlot()
         {
             Monitor.Enter(this);
-            ////if (_currentSlot >= _processFrozenPerSlot.Count)
-            ////{
-            ////    Console.WriteLine("Slot duration ended but no more slots to process.");
-            ////    return;
-            ////}
+            if (_currentSlot >= _statePerSlot.Count)
+            {
+                Console.WriteLine("Slot duration ended but no more slots to process.");
+                return;
+            }
             
-            // TODO should not process if previous slot was running still? prolly wait a bit
-
             Console.WriteLine("Preparing new slot -----------------------");
 
             Console.WriteLine($"Have ({_bufferLeaseRequests.Count}) requests to process for this slot");
+
             // Switch process state
-            //_isCrashed = _statePerSlot[_currentSlot][_processId].Crashed;
+            _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
+            Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot + 1}");
+
             if (_currentSlot > 0)
             {
                 _slots[_currentSlot].IsPaxosRunning = false;
@@ -107,15 +102,13 @@ namespace TKVLeaseManager.Services
 
             Monitor.PulseAll(this);
 
-            //Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot+1}");
-
             Monitor.Exit(this);
             DoPaxosSlot();
             Monitor.Enter(this);
 
             _currentSlot += 1;
 
-            // Every slot increase processId to allow progress when the system configuration changes // TODO????
+            // Every slot increase processId to allow progress when the system configuration changes
             _processId += _leaseManagerHosts.Count;
 
             Console.WriteLine("Ending preparation -----------------------");
@@ -130,10 +123,10 @@ namespace TKVLeaseManager.Services
         public PromiseReply PreparePaxos(PrepareRequest request)
         {
             Monitor.Enter(this);
-            ////while (_isFrozen)
-            ////{
-            ////    Monitor.Wait(this);
-            ////}
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
 
             Console.WriteLine($"({request.Slot})    Received Prepare({request.LeaderId} - {_processBook[request.LeaderId % _leaseManagerHosts.Count]})");
 
@@ -159,10 +152,10 @@ namespace TKVLeaseManager.Services
         public AcceptedReply AcceptPaxos(AcceptRequest request)
         {
             Monitor.Enter(this);
-            ////while (_isFrozen)
-            ////{
-            ////    Monitor.Wait(this);
-            ////}
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
 
             var slot = _slots[request.Slot];
 
@@ -196,10 +189,10 @@ namespace TKVLeaseManager.Services
         public DecideReply DecidePaxos(DecideRequest request)
         {
             Monitor.Enter(this);
-            ////while (_isFrozen)
-            ////{
-            ////    Monitor.Wait(this);
-            ////}
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
 
             var slot = _slots[request.Slot];
 
@@ -207,8 +200,7 @@ namespace TKVLeaseManager.Services
 
             // Learners keep track of all decided values to check for a majority
             var decidedValue = (request.WriteTimestamp, request.Leases.ToList());
-
-            // TODO FUCK
+            
             slot.DecidedReceived.Add(decidedValue);
 
             var majority = _leaseManagerHosts.Count / 2 + 1;
@@ -244,7 +236,7 @@ namespace TKVLeaseManager.Services
             foreach (Lease lease in request.Leases)
             {
                 // Remove Lease request that contains this lease if the request is in the buffer
-                _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => leaseRequest.Lease.Equals(lease)).ToList(); // TODO: not very concurrency friendly
+                _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => leaseRequest.Lease.Equals(lease)).ToList(); // TODO - CHECK AFTER CHECKPOINT: not very concurrency friendly
             }
             Console.WriteLine("Finished removing requests from buffer");
 
@@ -274,7 +266,6 @@ namespace TKVLeaseManager.Services
             List<Task> tasks = new();
             foreach (var host in _leaseManagerHosts)
             {
-                //if (host.Key == _processBook[leaderId % _leaseManagerHosts.Count]) continue; // TODO?
                 var t = Task.Run(() =>
                 {
                     try
@@ -315,7 +306,7 @@ namespace TKVLeaseManager.Services
 
             var acceptResponses = new List<AcceptedReply>();
 
-            var tasks = _leaseManagerHosts/*.Where(host => host.Key != _processBook[leaderId % _leaseManagerHosts.Count])*/
+            var tasks = _leaseManagerHosts
                 .Select(host => Task.Run(() =>
                 {
                     Console.WriteLine("Sending accept request");
@@ -334,6 +325,7 @@ namespace TKVLeaseManager.Services
                 .ToList();
 
             Console.WriteLine("Waiting for majority accepts");
+
             // Wait for a majority of responses
             for (var i = 0; i < _leaseManagerHosts.Count / 2 + 1; i++)
             {
@@ -384,8 +376,7 @@ namespace TKVLeaseManager.Services
                 Monitor.Wait(this);
                 Console.WriteLine($"SLOT ({slot.Slot}) HAS ({slot.DecidedValues.Count}) VALUES");
                 Console.WriteLine($"Curr.Slot ({_currentSlot}), Slot({slot.Slot}), Equals({(!slot.DecidedValues.Except(new List<Lease>()).Any() ? "true" : "false")})");
-                // Slot ended without reaching consensus
-                // Do paxos again with another configuration
+                // Slot ended without reaching consensus -> Do paxos again with another configuration
                 if (_currentSlot > slot.Slot && !slot.DecidedValues.Except(new List<Lease>()).Any())
                 {
                     Console.WriteLine(
@@ -444,7 +435,7 @@ namespace TKVLeaseManager.Services
                 return false;
             }
 
-            // 2: is the leader me?
+            // 2: am I the Leader?
             if (_processId % _leaseManagerHosts.Count != leader)
             {
                 Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
@@ -453,35 +444,16 @@ namespace TKVLeaseManager.Services
 
             Console.WriteLine($"Starting Paxos slot in slot {_currentSlot} for slot {_currentSlot}");
 
-            // Select new leader
-            ////var processesSuspected = _processesSuspectedPerSlot[_currentSlot - 1];
-            //var leader = int.MaxValue;
-
-            ////foreach (var process in processesSuspected)
-            ////{
-            ////    // leaseManager process that is not suspected and has the lowest id
-            ////    if (!process.Value && process.Key < leader && _leaseManagerHosts.ContainsKey(process.Key.ToString()))
-            ////        leader = process.Key;
-            ////}
-
             Console.WriteLine($"Paxos leader is {leader} in slot {_currentSlot}");
 
-            // Save processId for current paxos slot
-            // Otherwise it might change in the middle of paxos if a new slot begins
+            // Save processId for current paxos slot otherwise it might change in the middle of paxos if a new slot begins
             var leaderCurrentId = _processId;
-
-            // 'leader' comes from config, doesn't account for increase in processId
-            ////if (_processId % _leaseManagerHosts.Count != leader)
-            ////{
-            ////    return WaitForPaxos(slot, request);
-            ////}
 
             // Send prepare to all acceptors
             List<PromiseReply> promiseResponses = SendPrepareRequest(_currentSlot, leaderCurrentId);
 
             ////Monitor.Enter(this);
             // Stop being leader if there is a more recent one
-            //get the last char of _processId // TODO: sus
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > _processId)
@@ -509,13 +481,8 @@ namespace TKVLeaseManager.Services
                 int size = _bufferLeaseRequests.Count;
                 for (int i = 0; i < size; i++)
                 {
-                    valueToPropose.Add(_bufferLeaseRequests[i].Lease); // i->0
-                    //_bufferLeaseRequests.RemoveAt(0);
+                    valueToPropose.Add(_bufferLeaseRequests[i].Lease);
                 }
-                //foreach (LeaseRequest request in _bufferLeaseRequests) // note: foreach might be bad cause if size of buffer changes then it implodes :skull:
-                //{
-                //    valueToPropose.Add(request.Lease);
-                //}
             }
 
             ////Monitor.Exit(this);
@@ -533,7 +500,7 @@ namespace TKVLeaseManager.Services
 
             var slot = _currentSlot > 1 ? _slots[_currentSlot - 1] : _slots[_currentSlot];
 
-            while (slot.IsPaxosRunning && slot.DecidedValues.SequenceEqual(new List<Lease>())) // could the list not be empty now?
+            while (slot.IsPaxosRunning && slot.DecidedValues.SequenceEqual(new List<Lease>()))
             {
                 Monitor.Wait(this);
             }
