@@ -125,14 +125,14 @@ namespace TKVTransactionManager.Services
 
             foreach (var dadintKey in transactionRequest.Reads)
             {
-                Console.WriteLine($"     DADINT2READ: {dadintKey}");
+                //Console.WriteLine($"     DADINT2READ: {dadintKey}");
                 // add to leasesRequired
                 leasesRequired.Add(dadintKey);
             }
 
             foreach (var dadint in transactionRequest.Writes)
             {
-                Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
+                //Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
                 leasesRequired.Add(dadint.Key);
             }
 
@@ -200,7 +200,7 @@ namespace TKVTransactionManager.Services
 
             Monitor.Enter(this);
 
-            Console.WriteLine($"Received status update from lease managers");
+            //Console.WriteLine($"Received status update from lease managers");
 
             Console.WriteLine($"    Got ({statusUpdateResponse.Leases.Count}) Leases.");
 
@@ -211,7 +211,7 @@ namespace TKVTransactionManager.Services
                 // Check if the lease is held by another process (TM)
                 if (lease.Id == _processId)
                 {
-                    Console.WriteLine("     Adding new lease...");
+                    //Console.WriteLine("     Adding new lease...");
                     _leasesHeld.Add(lease);
 
                     foreach (TransactionState tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))

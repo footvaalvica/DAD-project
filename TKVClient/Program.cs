@@ -89,7 +89,7 @@ namespace TKVClient
                     Console.WriteLine(e.Status);
                     indexTM = (++indexTM) % transactionManagers.Count;
                     tm = config.TransactionManagers[indexTM].Id;
-                    Console.WriteLine($"TM is now {tm}");
+                    //Console.WriteLine($"TM is now {tm}");
                 }
             }   
 
@@ -107,7 +107,7 @@ namespace TKVClient
 
                 foreach (string read in reads)
                 {
-                    Console.WriteLine("DADINT: [" + read + "]");
+                    //Console.WriteLine("DADINT: [" + read + "]");
                 }
 
                 Regex rg = new Regex(@"<""([^""]+)"",(\d+)>");
@@ -127,7 +127,7 @@ namespace TKVClient
                         string number = match.Groups[i + 1].Value;
                         try
                         {
-                            Console.WriteLine("DADINT: [" + key + ", " + number + "]");
+                            //Console.WriteLine("DADINT: [" + key + ", " + number + "]");
 
                             writesList.Add(new DADInt { Key = key, Value = int.Parse(number) });
 
