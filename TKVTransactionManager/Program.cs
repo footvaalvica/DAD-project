@@ -19,8 +19,7 @@ namespace TKVTransactionManager
             TimeSpan timeToGo = TimeSpan.Zero; //  time - DateTime.Now.TimeOfDay; // TODO: remove before submission
             if (timeToGo < TimeSpan.Zero)
             {
-                Console.WriteLine("Slot starting before finished server setup.");
-                Console.WriteLine("Aborting...");
+                Console.WriteLine("Slot starting before finished server setup. Aborting...");
                 Environment.Exit(0);
                 return;
             }
