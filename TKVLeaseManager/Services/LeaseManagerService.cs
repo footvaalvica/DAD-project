@@ -93,6 +93,7 @@ namespace TKVLeaseManager.Services
 
             // Switch process state
             _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
+            // _processId % _leaseManagerHosts.Count -> since we increment processId every slot, we need to do this operation to guarantee that the index is always between 0 and #LMs - 1
             Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}");
 
             if (_currentSlot > 0)
@@ -392,7 +393,7 @@ namespace TKVLeaseManager.Services
         {
             Monitor.Enter(this);
             var success = true;
-            Console.WriteLine("waiting for paxos");
+            Console.WriteLine("Waiting for paxos...");
             while (slot.IsPaxosRunning)
             {
                 Monitor.Wait(this);
@@ -407,7 +408,7 @@ namespace TKVLeaseManager.Services
                     break;
                 }
             }
-            Console.WriteLine("Paxos was sucessful!: + " + success);
+            Console.WriteLine("Paxos was sucessful?: " + success);
             Monitor.Exit(this);
             return success;
         }
@@ -418,7 +419,7 @@ namespace TKVLeaseManager.Services
 
             if (_bufferLeaseRequests.Count == 0)
             {
-                Console.WriteLine("no lease requests to process");
+                Console.WriteLine("No lease requests to process");
                 return true;
             }
 

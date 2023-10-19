@@ -20,6 +20,5 @@ namespace TKVTransactionManager.Services
         {
             return Task.FromResult(serverService.TxSubmit(request));
         }
-        // TODO: communication
     }
 }

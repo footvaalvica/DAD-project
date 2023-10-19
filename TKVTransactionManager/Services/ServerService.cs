@@ -25,7 +25,7 @@ namespace TKVTransactionManager.Services
             _tmsSuspectedPerSlot; // processes that this TM suspects to be crashed PER slot
 
         private readonly Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> _transactionManagers;
-        private readonly LeaseManagers _leaseManagers; // TODO: fix the service / see if its correct
+        private readonly LeaseManagers _leaseManagers;
         private readonly int _processIndex;
 
         // Paxos variables
@@ -41,10 +41,7 @@ namespace TKVTransactionManager.Services
 
         private List<DADInt> _dadIntsRead;
 
-        // TODO this assumes sequential transactions, which might be the case? I don't know
         private List<TransactionState> _transactionsState;
-        //private readonly Dictionary<(int, int), ClientCommand> tentativeCommands; // key: (clientId, clientSequenceNumber)
-        //private readonly Dictionary<(int, int), ClientCommand> committedCommands;
 
         public ServerService(
             string processId,
@@ -108,8 +105,7 @@ namespace TKVTransactionManager.Services
 
             Monitor.Exit(this);
         }
-        
-        // TODO why statusrequest not used? should be empty then!
+ 
         public StatusResponse Status(StatusRequest statusRequest)
         {
             if (_isCrashed) { Monitor.Wait(this); }
@@ -121,12 +117,11 @@ namespace TKVTransactionManager.Services
             if (_isCrashed) { Monitor.Wait(this); }
 
             var leasesRequired = new List<string>();
-            _dadIntsRead = new List<DADInt>(); // TODO ??
+            _dadIntsRead = new List<DADInt>();
 
             TransactionState transactionState = new TransactionState { Leases = new(), Request = transactionRequest };
 
-            Console.WriteLine($"Received transaction request: ");
-            Console.WriteLine($"     FROM: {transactionRequest.Id}");
+            Console.WriteLine($"Received transaction request FROM: {transactionRequest.Id}");
 
             foreach (var dadintKey in transactionRequest.Reads)
             {
@@ -147,9 +142,8 @@ namespace TKVTransactionManager.Services
                 .ToList();
             _transactionsState.Add(transactionState);
 
-            // TODO lease managers knowing about other projects' leases and stuffs (maybe)
 
-            // if it doesn't have all leases, request them
+            // if TM doesn't have all leases it must request them
             if (transactionState.Leases.Count > 0)
             {
                 Console.WriteLine($"Requesting leases...");
@@ -164,7 +158,6 @@ namespace TKVTransactionManager.Services
                     {
                         try
                         {
-                            Console.WriteLine("sending lease request");
                             _leaseManagers[host.Key].Lease(leaseRequest);
                         }
                         catch (Grpc.Core.RpcException e)
@@ -180,13 +173,10 @@ namespace TKVTransactionManager.Services
 
             Console.WriteLine($"Finished processing transaction request...");
             var transactionResponse = new TransactionResponse();
-
-            // TODO when replying we should compare slot of the request with the current slot and reply accordingly
-            transactionResponse.Response.AddRange(_dadIntsRead); // TODO: dadIntsRead is empty
+            transactionResponse.Response.AddRange(_dadIntsRead);
             return transactionResponse;
         }
 
-        // TODO this function should store things globally
         public void AskForLeaseManagersStatus()
         {
             Console.WriteLine("Requesting status update from lease managers...");
@@ -203,7 +193,10 @@ namespace TKVTransactionManager.Services
             }
 
             // they should all be the same, so we can just wait for one
-            Task.WaitAny(tasks.ToArray());
+            for (var i = 0; i < _leaseManagers.Count / 2 + 1; i++)
+            {
+                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+            }
 
             Monitor.Enter(this);
 
@@ -238,33 +231,6 @@ namespace TKVTransactionManager.Services
                     break;
                 }
             }
-          
-            // not part of checkpoint
-            // // foreach (TransactionState transactionState in _transactionsState
-            // //     .Where(_transactionsState => _transactionsState.Leases.Count == 0))
-            // // {
-            // //     Console.WriteLine($"    Finally executing transaction...");
-            // //     foreach (var dadintKey in transactionState.Request.Reads)
-            // //     {
-            // //         if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
-            // //             _dadIntsRead.Add(dadint);
-            // //         else
-            // //         {
-            // //             Console.WriteLine("     Requested read on non-existing DADINT."); // TODO
-            // //         }
-            // //     }
-
-            // //     foreach (var dadint in transactionState.Request.Writes)
-            // //     {
-            // //         if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
-            // //             j.Value = dadint.Value;
-            // //         else
-            // //         {
-            // //             Console.WriteLine("     Requested write on non-existing DADINT (to be implemented)."); // TODO
-            // //         }
-            // //     }
-            // // }
-            // // _transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
 
             Monitor.Exit(this);
         }
