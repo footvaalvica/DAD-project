@@ -3,4 +3,34 @@ syntax = "proto3";
 package TransactionManager_TransactionManagerProto;
 
 service TwoPhaseCommit {
+	rpc Prepare(PrepareRequest) returns (PrepareResponse) {}
+	rpc Commit(CommitRequest) returns (CommitResponse) {}
+	rpc Abort(AbortRequest) returns (AbortResponse) {}
+}
+
+message PrepareRequest {
+	string transactionId = 1;
+	int32 slot = 2;
+}
+
+message PrepareResponse {
+	bool ok = 1;
+}
+
+message CommitRequest {
+	string transactionId = 1;
+	int32 slot = 2;
+}
+
+message CommitResponse {
+	bool ok = 1;
+}
+
+message AbortRequest {
+	string transactionId = 1;
+	int32 slot = 2;
+}
+
+message AbortResponse {
+	bool ok = 1;
 }
