@@ -2,6 +2,7 @@
 using Utilities;
 using ClientTransactionManagerProto;
 using System.Text.RegularExpressions;
+using Grpc.Core;
 
 namespace TKVClient
 {
@@ -17,9 +18,28 @@ namespace TKVClient
                 if (command.Length == 2)
                 {
                     Console.WriteLine("Waiting for " + command[1] + " milliseconds...");
-                    Thread.Sleep(int.Parse(command[1]));
+
+                    int millisecondsToWait = int.Parse(command[1]);
+                    DateTime startTime = DateTime.Now;
+                    // Wait loop
+                    while ((DateTime.Now - startTime).TotalMilliseconds < millisecondsToWait)
+                    {
+                        // Check for key press
+                        if (Console.KeyAvailable)
+                        {
+                            Console.WriteLine("Key pressed. Wait interrupted.");
+                            return;
+                        }
+
+                        //Sleep for a shorter interval to make the check more responsive
+                        Thread.Sleep(100);
+                    }
+                    Console.WriteLine("Wait completed.");
                 }
-                else { Console.WriteLine("No time amount provided for wait."); }
+                else
+                {
+                    Console.WriteLine("No time amount provided for wait.");
+                }
             }
             catch (FormatException)
             {
@@ -235,10 +255,25 @@ namespace TKVClient
             //    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
             //}
 
-            foreach (string command in commands) { HandleCommand(command, processId, transactionManagers); }
+            // handle commands from script file while client is running
 
-            Console.WriteLine("Press q to exit.");
-            while (Console.ReadKey().Key != ConsoleKey.Q) { };
+            Console.WriteLine("Press any key to exit.");
+
+            while (!Console.KeyAvailable)
+            {
+                foreach (string command in commands)
+                {
+                    Console.WriteLine("Command: " + command);
+                    HandleCommand(command, processId, transactionManagers);
+                }
+
+                // Read commands from the file and continue the loop
+                commands = File.ReadAllLines(scriptFilePath);
+            }
+
+            // Optional: Read the key to clear the input buffer and exit
+            Console.ReadKey(intercept: true);
+
         }
     }
 }
