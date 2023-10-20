@@ -43,6 +43,8 @@ namespace TKVTransactionManager.Services
 
         private List<TransactionState> _transactionsState;
 
+        private List<TransactionState> _transactionsLedger;
+
         public ServerService(
             string processId,
             Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers,
@@ -119,7 +121,7 @@ namespace TKVTransactionManager.Services
             var leasesRequired = new List<string>();
             _dadIntsRead = new List<DADInt>();
 
-            TransactionState transactionState = new TransactionState { Leases = new(), Request = transactionRequest };
+            var transactionState = new TransactionState { Leases = new(), Request = transactionRequest };
 
             Console.WriteLine($"Received transaction request FROM: {transactionRequest.Id}");
 
@@ -214,7 +216,7 @@ namespace TKVTransactionManager.Services
                     //Console.WriteLine("     Adding new lease...");
                     _leasesHeld.Add(lease);
 
-                    foreach (TransactionState tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))
+                    foreach (var tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))
                     {
                         tsState.Leases.RemoveAll(leasePerm => lease.Permissions.Contains(leasePerm));
                     }
@@ -232,6 +234,18 @@ namespace TKVTransactionManager.Services
                 }
             }
 
+            // TODO: Store the transactions somewhere until the next turn if we can't execute them
+            // todo: wait before executing if conflicting leases
+
+            // this bit of code checks for the transactions that we can execute because we have all the leases required (does it?).
+            foreach (var transactionState in _transactionsState.Where(transactionsState => transactionsState.Leases.Count == 0))
+            {
+                // TODO: Before we execute and gossip we need to make sure all conditions are okay!
+                GossipTransaction(transactionState);
+                ExecuteTransaction(transactionState);
+            }
+
+
             /* TODO: Look through all transactions that we want to execute and check if we have all the leases required to execute them.
                  If not, too bad! We'll store them somewhere and wait for the next slot to try again.
                  If the lease manager assign two or more leases to the same key in one slot, we'll have to wait for the other lease to execute before we execute ours. (We'll be warned by that TM)
@@ -245,24 +259,51 @@ namespace TKVTransactionManager.Services
             Monitor.Exit(this);
         }
 
-        public void ExecuteTransaction()
+        public void ExecuteTransaction(TransactionState transactionState)
         {
-            /* TODO: Executing a transaction means doing the executing stuff and adding to our log of all transactions executed so far!
-             */
+            Console.WriteLine($"    Finally executing transaction...");
+            foreach (var dadintKey in transactionState.Request.Reads)
+            {
+                if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
+                    _dadIntsRead.Add(dadint);
+                else
+                {
+                    Console.WriteLine("     Requested read on non-existing DADINT.");
+                }
+            }
+
+            foreach (var dadint in transactionState.Request.Writes)
+            {
+                if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
+                    j.Value = dadint.Value;
+                else
+                {
+                    Console.WriteLine("     Requested write on non-existing DADINT (to be implemented).");
+                }
+            }
+            ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
+            // TODO: Store the transactions somewhere until the next turn
+            // todo: wait before executing if conflicting leases
         }
 
-        public void GossipTransaction()
+
+        public void GossipTransaction(TransactionState transactionState)
         {
             /* TODO: This is just a matter of sending a transaction to all other TMs.
                  We'll have to wait for a majority of TMs to reply back saying that they have received it.
                  If we don't receive a majority, we'll have to wait for the next slot to try again.
                  Once they have replied saying that they received the transaction, we'll tell them to execute it.
               */
+
+            // send transaction to all other TMs via some special pipelined command that skips some steps and currently doesnt exist
+            // other TMs check if they can execute that transaction (they don't need leases? they should check if we have the lease? ig) could be skipped probably
+            // because we know that we have all the leases required to execute the transaction
+            // when the majority of TMs reply back, we then tell all TMs to execute the transaction
         }
 
         public void receiveGossip()
         {
-            /* TODO: When a gossip request is received we first reply to the TM saying that we have received it!
+            /* TODO: When a gossip request is received we first reply to the TM saying that we have received it and that we can execute it.
                  After they reply back saying we can execute the transaction and add it to our log.
                  If it any point they don't reply back, we assume that they are crashed and do nothing.
              */

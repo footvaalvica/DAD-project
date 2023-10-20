@@ -6,6 +6,7 @@ import "Transaction.proto";
 
 service Gossip {
 	rpc Gossip (GossipRequest) returns (GossipResponse) {}
+	rpc Update (UpdateRequest) returns (UpdateResponse) {}
 }
 
 message GossipRequest {
