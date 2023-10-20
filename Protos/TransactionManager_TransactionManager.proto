@@ -2,5 +2,17 @@ syntax = "proto3";
 
 package TransactionManager_TransactionManagerProto;
 
-service TwoPhaseCommit {
+import "Transaction.proto";
+
+service Gossip {
+	rpc Gossip (GossipRequest) returns (GossipResponse) {}
 }
+
+message GossipRequest {
+	DADInt transaction = 1;
+}
+
+message GossipResponse {
+	bool ok = 1;
+}
+

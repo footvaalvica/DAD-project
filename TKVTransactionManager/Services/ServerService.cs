@@ -232,7 +232,50 @@ namespace TKVTransactionManager.Services
                 }
             }
 
+            /* TODO: Look through all transactions that we want to execute and check if we have all the leases required to execute them.
+                 If not, too bad! We'll store them somewhere and wait for the next slot to try again.
+                 If the lease manager assign two or more leases to the same key in one slot, we'll have to wait for the other lease to execute before we execute ours. (We'll be warned by that TM)
+                 If we're not warned by the other TM within that slot, we can assume that the other TM is crashed and we can execute our transaction in the next slot.
+                 If we're warned by the other TM that they executed, we can execute!
+                 If none of the above happens, we can execute!
+                 Before executing we first need to Gossip the transaction to all other TMs.
+                 Then we are done! Just to do this for all transactions that we have stored.
+             */
+
             Monitor.Exit(this);
+        }
+
+        public void ExecuteTransaction()
+        {
+            /* TODO: Executing a transaction means doing the executing stuff and adding to our log of all transactions executed so far!
+             */
+        }
+
+        public void GossipTransaction()
+        {
+            /* TODO: This is just a matter of sending a transaction to all other TMs.
+                 We'll have to wait for a majority of TMs to reply back saying that they have received it.
+                 If we don't receive a majority, we'll have to wait for the next slot to try again.
+                 Once they have replied saying that they received the transaction, we'll tell them to execute it.
+              */
+        }
+
+        public void receiveGossip()
+        {
+            /* TODO: When a gossip request is received we first reply to the TM saying that we have received it!
+                 After they reply back saying we can execute the transaction and add it to our log.
+                 If it any point they don't reply back, we assume that they are crashed and do nothing.
+             */
+        }
+
+        public void updateTransactionLogStatus()
+        {
+            /* TODO: When we begin a new slot, we ask a majority of process for their logs, one of them is the latest one!
+                 The latest one is the biggest one, so we just need to compare the sizes of the logs.
+                 If it's different from ours, we need to update our log to the latest one!
+                 We do this by deleting everything we have and rebuilding it from the latest one.
+                 This is very slow, but it's the simplest way to do it and I frankly don't care anymore.
+             */
         }
     }
 }

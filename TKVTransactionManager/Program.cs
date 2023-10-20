@@ -112,7 +112,7 @@ namespace TKVTransactionManager
             {
                 Services = {
                     Client_TransactionManagerService.BindService(new TMService(serverService)),
-                    TwoPhaseCommit.BindService(new TwoPhaseCommitService(serverService)),
+                    TwoPhaseCommit.BindService(new GossipService(serverService)),
                 },
                 Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
             };
