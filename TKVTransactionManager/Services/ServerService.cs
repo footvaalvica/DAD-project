@@ -273,6 +273,7 @@ namespace TKVTransactionManager.Services
             /* TODO: When we begin a new slot, we ask a majority of process for their logs, one of them is the latest one!
                  The latest one is the biggest one, so we just need to compare the sizes of the logs.
                  If it's different from ours, we need to update our log to the latest one!
+                 We also need to give up all the leases that we hold.
                  We do this by deleting everything we have and rebuilding it from the latest one.
                  This is very slow, but it's the simplest way to do it and I frankly don't care anymore.
              */
