@@ -87,14 +87,14 @@ namespace TKVLeaseManager.Services
                 return;
             }
             
-            Console.WriteLine("Preparing new slot -----------------------");
+            Console.WriteLine("========== Preparing new slot =========================");
 
             //Console.WriteLine($"Have ({_bufferLeaseRequests.Count}) requests to process for this slot");
 
             // Switch process state
             _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
             // _processId % _leaseManagerHosts.Count -> since we increment processId every slot, we need to do this operation to guarantee that the index is always between 0 and #LMs - 1
-            Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}");
+            Console.WriteLine($"State: Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}\n");
 
             if (_currentSlot > 0)
             {
@@ -112,7 +112,7 @@ namespace TKVLeaseManager.Services
             // Every slot increase processId to allow progress when the system configuration changes
             _processId += _leaseManagerHosts.Count;
 
-            Console.WriteLine("Ending preparation -----------------------");
+            //Console.WriteLine("Ending preparation -----------------------");
             Monitor.Exit(this);
         }
 

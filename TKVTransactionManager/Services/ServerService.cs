@@ -80,12 +80,12 @@ namespace TKVTransactionManager.Services
                 return;
             }
 
-            Console.WriteLine($"Preparing slot... ------------------------------------------");
+            Console.WriteLine("========== Preparing new slot =========================");
 
             // get process state
             _isCrashed = _tmsStatePerSlot[_currentSlot][_processIndex];
 
-            Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")}");
+            Console.WriteLine($"State: Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}\n");
 
             // Global slot counter
             _currentSlot++;
@@ -93,7 +93,7 @@ namespace TKVTransactionManager.Services
             // If process is crashed, don't do anything
             if (_isCrashed)
             {
-                Console.WriteLine("Ending preparation -----------------------");
+                //Console.WriteLine("Ending preparation -----------------------");
                 Monitor.Exit(this);
                 return;
             }

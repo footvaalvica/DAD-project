@@ -180,8 +180,6 @@ namespace TKVClient
 
             switch (commandArgs[0].ToLower())
             {
-                case "#":
-                    break;
                 case "w":
                     Console.WriteLine("Client set to wait...");
                     Wait(commandArgs);
@@ -264,8 +262,11 @@ namespace TKVClient
             {
                 foreach (string command in commands)
                 {
-                    Console.WriteLine("Command: " + command);
-                    HandleCommand(command, processId, transactionManagers);
+                    if (!command[0].Equals('#'))
+                    {
+                        Console.WriteLine("Command: " + command);
+                        HandleCommand(command, processId, transactionManagers);
+                    }                  
                 }
 
                 // Read commands from the file and continue the loop
