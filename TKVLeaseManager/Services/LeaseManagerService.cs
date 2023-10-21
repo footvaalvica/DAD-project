@@ -48,7 +48,7 @@ namespace TKVLeaseManager.Services
         private readonly List<List<ProcessState>> _statePerSlot;
         private readonly List<string> _processBook;
         private readonly ConcurrentDictionary<int, SlotData> _slots;
-        private string? _leader = null; // TO CHECK AFTER CHECKPOINT
+        private int _leader = 0; // TO CHECK AFTER CHECKPOINT
         private volatile List<LeaseRequest> _bufferLeaseRequests = new();
         private volatile bool _isDeciding = false;
         private List<string> _badHosts = new();
@@ -430,29 +430,34 @@ namespace TKVLeaseManager.Services
                 return true;
             }
 
-            // 1: who's the leader?
-            var leader = int.MaxValue;
-            for (int i = 0; i < _statePerSlot[_currentSlot - 1].Count; i++)
+            if (_statePerSlot[_currentSlot][_leader].Crashed)
             {
-                // If process is normal and not suspected by it's successor
-                // A B C : B only becomes leader if C doesn't suspect it and all before are crashed
-                if (_statePerSlot[_currentSlot - 1][i].Crashed == false &&
-                    !_statePerSlot[_currentSlot - 1][i + 1].Suspects.Contains(_processBook[i]))
+                // 1: who's the leader?
+                var leader = int.MaxValue;
+                // all before and including the leader are crashed
+                for (int i = _leader + 1; i < _statePerSlot[_currentSlot - 1].Count; i++)
                 {
-                    leader = i;
-                    break;
+                    // If process is normal and not suspected by it's successor
+                    // A B C : B only becomes leader if C doesn't suspect it and all before are crashed
+                    if (_statePerSlot[_currentSlot][i].Crashed == false &&
+                        !_statePerSlot[_currentSlot][i + 1].Suspects.Contains(_processBook[i]))
+                    {
+                        leader = i;
+                        break;
+                    }
                 }
-            }
 
-            if (leader == int.MaxValue)
-            {
-                //Console.WriteLine("No leader found"); // Should never happen
-                Monitor.Exit(this);
-                return false;
+                if (leader == int.MaxValue)
+                {
+                    //Console.WriteLine("No leader found"); // Should never happen
+                    Monitor.Exit(this);
+                    return false;
+                }
+                _leader = leader;
             }
 
             // 2: am I the Leader?
-            if (_processId % _leaseManagerHosts.Count != leader)
+            if (_processId % _leaseManagerHosts.Count != _leader)
             {
                 //Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
                 return WaitForPaxos(slot);
@@ -460,7 +465,7 @@ namespace TKVLeaseManager.Services
 
             //Console.WriteLine($"Starting Paxos slot in slot {_currentSlot} for slot {_currentSlot}");
 
-            Console.WriteLine($"Paxos leader is {leader} in slot {_currentSlot}");
+            Console.WriteLine($"Paxos leader is {_leader} in slot {_currentSlot}");
 
             // Save processId for current paxos slot otherwise it might change in the middle of paxos if a new slot begins
             var leaderCurrentId = _processId;
