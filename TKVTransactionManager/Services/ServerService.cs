@@ -275,10 +275,21 @@ namespace TKVTransactionManager.Services
             foreach (var dadint in transactionState.Request.Writes)
             {
                 if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
-                    j.Value = dadint.Value;
+                {
+                    try
+                    {
+                        GossipTransaction(dadint);
+                        j.Value = dadint.Value;
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e);
+                        continue; // gossip unsuccessful, skip this write and continue with the next one
+                    }
+                }
                 else
                 {
-                    Console.WriteLine("     Requested write on non-existing DADINT (to be implemented).");
+                    _transactionManagerDadInts.Add(dadint.Key, dadint);
                 }
             }
             ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
@@ -287,13 +298,50 @@ namespace TKVTransactionManager.Services
         }
 
 
-        public void GossipTransaction(TransactionState transactionState)
+        public void GossipTransaction(DADInt dadint)
         {
             /* TODO: This is just a matter of sending a transaction to all other TMs.
                  Once they have replied saying that a majority of them executed the transaction, we can execute it.
 
                  Do we need two phases here? We have to think about it.
               */
+
+            Console.WriteLine($"    Gossiping transaction...");
+            List<Task> tasks = new List<Task>();
+            List<GossipResponse> responses = new List<GossipResponse>();
+            foreach (var host in _transactionManagers)
+            {
+                var t = Task.Run(() =>
+                {
+                    try
+                    {
+                        GossipResponse gossipResponse = _transactionManagers[host.Key].Gossip(new GossipRequest { Transaction = dadint}); // should we send to all TM or ignore the crashed ones?
+                        responses.Add(gossipResponse);
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+                    return Task.CompletedTask;
+                });
+                tasks.Add(t);
+            }
+
+            foreach(GossipResponse response in responses)
+            {
+                if (response.Ok)
+                {
+                    Console.WriteLine("     Gossip successful.");
+                }
+                else
+                {
+                    throw new Exception("Gossip failed.");
+                }
+            }
+            
+            // if we get here all gossips were successful and therefore we can execute the transaction
+
+            
 
             // send transaction to all other TMs via some special pipelined command that skips some steps and currently doesnt exist
             // other TMs check if they can execute that transaction (they don't need leases? they should check if we have the lease? ig) could be skipped probably
@@ -309,7 +357,17 @@ namespace TKVTransactionManager.Services
 
 
             // ! something like this should be enough!
-            ////ExecuteTransaction(request.Transaction);
+            // should we execute the transaction immediately or do like a 2pc?
+            if (_transactionManagerDadInts.TryGetValue(request.Transaction.Key, out var j))
+            {
+                    request.Transaction.Value = request.Transaction.Value;
+            }
+            else
+            {            
+                _transactionManagerDadInts.Add(request.Transaction.Key, new DADInt { Key = request.Transaction.Key, Value = request.Transaction.Value });
+
+            }
+
             return new GossipResponse { Ok = true };
         }
 
