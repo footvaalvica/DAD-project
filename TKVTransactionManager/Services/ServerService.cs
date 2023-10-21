@@ -290,11 +290,9 @@ namespace TKVTransactionManager.Services
         public void GossipTransaction(TransactionState transactionState)
         {
             /* TODO: This is just a matter of sending a transaction to all other TMs.
-                 We'll have to wait for a majority of TMs to reply back saying that they have received it.
-                 If we don't receive a majority, we'll have to wait for the next slot to try again.
-                 Once they have replied saying that they received the transaction, we'll tell them to execute it.
+                 Once they have replied saying that a majority of them executed the transaction, we can execute it.
 
-                 We could just tell them to execute and wait for a majority to execute? We probably don't need two phases. 
+                 Do we need two phases here? We have to think about it.
               */
 
             // send transaction to all other TMs via some special pipelined command that skips some steps and currently doesnt exist
@@ -303,17 +301,19 @@ namespace TKVTransactionManager.Services
             // when the majority of TMs reply back, we then tell all TMs to execute the transaction
         }
 
-        public GossipResponse receiveGossip(GossipRequest request)
+        public GossipResponse ReceiveGossip(GossipRequest request)
         {
-            /* TODO: When a gossip request is received we first reply to the TM saying that we have received it and that we can execute it.
-                 After they reply back saying we can execute the transaction and add it to our log.
-                 If it any point they don't reply back, we assume that they are crashed and do nothing.
+            /* TODO: When a gossip request is received we first reply to the TM saying that we have received it and that we will execute it.
+             Do we need two phases here? We have to think about it.
              */
 
+
+            // ! something like this should be enough!
+            ////ExecuteTransaction(request.Transaction);
             return new GossipResponse { Ok = true };
         }
 
-        public void updateTransactionLogStatus()
+        public void UpdateTransactionLogStatus()
         {
             /* TODO: When we begin a new slot, we ask a majority of process for their logs, one of them is the latest one!
                  The latest one is the biggest one, so we just need to compare the sizes of the logs.
@@ -322,9 +322,14 @@ namespace TKVTransactionManager.Services
                  We do this by deleting everything we have and rebuilding it from the latest one.
                  This is very slow, but it's the simplest way to do it and I frankly don't care anymore.
              */
+
+            // ask for logs from all other TMs and wait for a majority of them to reply
+            // compare the sizes of the logs and get the biggest one
+            // update our log to the biggest one
+            // give up all leases that we hold
         }
 
-        public UpdateResponse replyWithUpdate(UpdateRequest request)
+        public UpdateResponse ReplyWithUpdate(UpdateRequest request)
         {
             /* TODO: When we receive an update request, we need to reply back with our log. */
 
