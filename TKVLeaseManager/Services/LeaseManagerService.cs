@@ -51,6 +51,7 @@ namespace TKVLeaseManager.Services
         private string? _leader = null; // TO CHECK AFTER CHECKPOINT
         private volatile List<LeaseRequest> _bufferLeaseRequests = new();
         private volatile bool _isDeciding = false;
+        private List<string> _badHosts = new();
 
         public LeaseManagerService(
             int processId,
@@ -100,6 +101,13 @@ namespace TKVLeaseManager.Services
             if (_currentSlot > 0)
             {
                 _slots[_currentSlot].IsPaxosRunning = false;
+            }
+
+            _badHosts.Clear();
+            for (int i = 0; i < _processBook.Count; i++)
+            {
+                if (_statePerSlot[_currentSlot][i].Crashed)
+                    _badHosts.Add(_processBook[i]);
             }
 
             Monitor.PulseAll(this);
@@ -269,15 +277,8 @@ namespace TKVLeaseManager.Services
 
             List<PromiseReply> promiseResponses = new();
 
-            List<string> badHosts = new();
-            for (int i = 0; i < _processBook.Count; i++)
-            {
-                if (_statePerSlot[slot][i].Crashed)
-                    badHosts.Add(_processBook[i]);
-            }
-
             List<Task> tasks = new();
-            foreach (var host in _leaseManagerHosts.Where(host => !badHosts.Contains(host.Key)
+            foreach (var host in _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
                 && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key)))
             {
                 var t = Task.Run(() =>
@@ -316,18 +317,11 @@ namespace TKVLeaseManager.Services
             };
             acceptRequest.Leases.AddRange(lease);
 
-            List<string> badHosts = new();
-            for (int i = 0; i < _processBook.Count; i++)
-            {
-                if (_statePerSlot[slot][i].Crashed)
-                    badHosts.Add(_processBook[i]);
-            }
-
             //Console.WriteLine($"({slot}) Sending Accept({leaderId % _leaseManagerHosts.Count},{lease})");
 
             var acceptResponses = new List<AcceptedReply>();
 
-            var tasks = _leaseManagerHosts.Where(host => !badHosts.Contains(host.Key)
+            var tasks = _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
                 && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
                 {
@@ -367,15 +361,9 @@ namespace TKVLeaseManager.Services
             };
             decideRequest.Leases.AddRange(lease);
 
-            List<string> badHosts = new();
-            for (int i=0; i<_processBook.Count; i++)
-            {
-                if (_statePerSlot[slot][i].Crashed)
-                    badHosts.Add(_processBook[i]);
-            }
-
             //Console.WriteLine($"({slot}) Sending Decide({writeTimestamp},{lease})");
-            foreach (var t in _leaseManagerHosts.Where(host => host.Key != _processName && !badHosts.Contains(host.Key)
+            // send decide to self (also a learner) and to other correct hosts
+            foreach (var t in _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
               && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
             {
@@ -524,6 +512,10 @@ namespace TKVLeaseManager.Services
         public StatusUpdateResponse StatusUpdate()
         {
             Monitor.Enter(this);
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
 
             var slot = _currentSlot > 1 ? _slots[_currentSlot - 1] : _slots[_currentSlot];
 
@@ -543,8 +535,11 @@ namespace TKVLeaseManager.Services
         public Empty LeaseRequest(LeaseRequest request)
         {
             Monitor.Enter(this);
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
 
-            Console.WriteLine("Received lease request from a transaction manager");
             if (_isDeciding)
                 Monitor.Wait(this);
 
