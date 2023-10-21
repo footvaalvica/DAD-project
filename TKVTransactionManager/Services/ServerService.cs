@@ -293,6 +293,8 @@ namespace TKVTransactionManager.Services
                  We'll have to wait for a majority of TMs to reply back saying that they have received it.
                  If we don't receive a majority, we'll have to wait for the next slot to try again.
                  Once they have replied saying that they received the transaction, we'll tell them to execute it.
+
+                 We could just tell them to execute and wait for a majority to execute? We probably don't need two phases.
               */
 
             // send transaction to all other TMs via some special pipelined command that skips some steps and currently doesnt exist
