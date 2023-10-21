@@ -12,7 +12,7 @@ namespace TKVLeaseManager
         static Timer timer;
         private static void SetSlotTimer(TimeSpan time, int slotDuration, LeaseManagerService leaseManagerService)
         {
-            TimeSpan timeToGo = TimeSpan.Zero; //time - DateTime.Now.TimeOfDay; TODO: remove before submission
+            TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup. Aborting...");
@@ -32,16 +32,17 @@ namespace TKVLeaseManager
             AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
             string processId = args[0];
-            string host = args[1];
-            int port = int.Parse(args[2]);
-            bool debug = args.Length > 3 && args[3].Equals("debug");
+            TimeSpan startTime = TimeSpan.Parse(args[1]);
+            string host = args[2];
+            int port = int.Parse(args[3]);
+            bool debug = args.Length > 4 && args[4].Equals("debug");
 
             // Data from config file
             TKVConfig config = Common.ReadConfig();
 
             // Process data from config file to send to serverService
             int numberOfProcesses = config.NumberOfProcesses;
-            (int slotDuration, TimeSpan startTime) = config.SlotDetails;
+            (int slotDuration, _) = config.SlotDetails; // Ignoring starttime from config file
             Dictionary<string, Paxos.PaxosClient> leaseManagerHosts = config.LeaseManagers.ToDictionary(
                 key => key.Id,
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))

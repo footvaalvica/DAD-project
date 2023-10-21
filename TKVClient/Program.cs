@@ -215,7 +215,8 @@ namespace TKVClient
                 return;
             }
             string processId = args[0];
-            string scriptName = args[1];
+            TimeSpan starttime = TimeSpan.Parse(args[1]);
+            string scriptName = args[2];
             bool debug = args.Length > 2 && args[2].Equals("debug");
 
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
@@ -250,10 +251,10 @@ namespace TKVClient
             }
 
             // Wait for slots to start
-            //if (DateTime.Now.TimeOfDay < startTime) // TODO: change before submission
-            //{
-            //    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
-            //}
+            if (DateTime.Now.TimeOfDay < starttime)
+            {
+                System.Threading.Thread.Sleep(starttime - DateTime.Now.TimeOfDay);
+            }
 
             // handle commands from script file while client is running
 
