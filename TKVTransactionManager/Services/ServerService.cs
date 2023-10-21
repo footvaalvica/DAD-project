@@ -121,7 +121,7 @@ namespace TKVTransactionManager.Services
 
             TransactionState transactionState = new TransactionState { Leases = new(), Request = transactionRequest };
 
-            Console.WriteLine($"Received transaction request FROM: {transactionRequest.Id}");
+            Console.WriteLine($"Received transaction request from: {transactionRequest.Id}");
 
             foreach (var dadintKey in transactionRequest.Reads)
             {

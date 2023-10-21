@@ -213,10 +213,13 @@ namespace TKVClient
                 return;
             }
             string processId = args[0];
-            TimeSpan starttime = TimeSpan.Parse(args[1]);
-            string scriptName = args[2];
-            bool debug = args.Length > 2 && args[2].Equals("debug");
-
+            string scriptName = args[1];
+            TimeSpan startTime = TimeSpan.Zero;
+            if (args.Length > 2)
+            {
+                startTime = TimeSpan.Parse(args[2]);
+            }
+                
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
 
             try { config = Common.ReadConfig(); }
@@ -226,7 +229,7 @@ namespace TKVClient
                 return;
             }
 
-            (int slotDuration, TimeSpan startTime) = config.SlotDetails;
+            (int slotDuration, _) = config.SlotDetails;
 
             // Process data from config file
             transactionManagers = config.TransactionManagers.ToDictionary(key => key.Id, value =>
@@ -248,10 +251,13 @@ namespace TKVClient
                 return;
             }
 
-            // Wait for slots to start
-            if (DateTime.Now.TimeOfDay < starttime)
+            if (startTime != TimeSpan.Zero)
             {
-                System.Threading.Thread.Sleep(starttime - DateTime.Now.TimeOfDay);
+                // Wait for slots to start
+                if (DateTime.Now.TimeOfDay < startTime)
+                {
+                    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
+                }
             }
 
             // handle commands from script file while client is running

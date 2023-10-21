@@ -32,7 +32,7 @@ namespace Launcher
                 case "C":
                     var script = configArgs[3];
                     Console.WriteLine("Starting client " + id + " with script " + script);
-                    return StartProcess(clientPath, id + " " + starttime + " " + script);
+                    return StartProcess(clientPath, id + " " + script + " " + starttime);
                 case "T":
                 case "L":
                     var url = configArgs[3].Remove(0, 7);
@@ -43,11 +43,11 @@ namespace Launcher
 
                     if (processType.Equals("T"))
                     {
-                        return StartProcess(transactionManagerPath, id + " " + starttime + " " + host + " " + port);
+                        return StartProcess(transactionManagerPath, id + " " + host + " " + port + " " + starttime);
                     }
                     else
                     {
-                        return StartProcess(leaseManagerPath, id + " " + starttime + " " + host + " " + port);
+                        return StartProcess(leaseManagerPath, id + " " + host + " " + port + " " + starttime);
                     }
                 default:
                     throw new Exception("Invalid config file");

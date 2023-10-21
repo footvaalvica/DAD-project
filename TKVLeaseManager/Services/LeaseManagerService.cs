@@ -49,7 +49,8 @@ namespace TKVLeaseManager.Services
         private readonly List<string> _processBook;
         private readonly ConcurrentDictionary<int, SlotData> _slots;
         private string? _leader = null; // TO CHECK AFTER CHECKPOINT
-        private List<LeaseRequest> _bufferLeaseRequests = new();
+        private volatile List<LeaseRequest> _bufferLeaseRequests = new();
+        private volatile bool _isDeciding = false;
 
         public LeaseManagerService(
             int processId,
@@ -111,6 +112,8 @@ namespace TKVLeaseManager.Services
 
             // Every slot increase processId to allow progress when the system configuration changes
             _processId += _leaseManagerHosts.Count;
+
+            _isDeciding = false;
 
             //Console.WriteLine("Ending preparation -----------------------");
             Monitor.Exit(this);
@@ -194,6 +197,7 @@ namespace TKVLeaseManager.Services
             {
                 Monitor.Wait(this);
             }
+            _isDeciding = true;
 
             var slot = _slots[request.Slot];
 
@@ -228,6 +232,7 @@ namespace TKVLeaseManager.Services
                 if (requestFrequency.Value < majority) continue;
                 slot.DecidedValues = requestFrequency.Key.Item2;
                 slot.IsPaxosRunning = false;
+                _isDeciding = false;
                 Monitor.PulseAll(this);
             }
 
@@ -237,7 +242,7 @@ namespace TKVLeaseManager.Services
             foreach (Lease lease in request.Leases)
             {
                 // Remove Lease request that contains this lease if the request is in the buffer
-                _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => leaseRequest.Lease.Equals(lease)).ToList(); // TODO - CHECK AFTER CHECKPOINT: not very concurrency friendly
+                _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => !leaseRequest.Lease.Equals(lease)).ToList();
             }
             //Console.WriteLine("Finished removing requests from buffer");
 
@@ -539,6 +544,25 @@ namespace TKVLeaseManager.Services
         {
             Monitor.Enter(this);
 
+            Console.WriteLine("Received lease request from a transaction manager");
+            if (_isDeciding)
+                Monitor.Wait(this);
+
+            bool leaseExistsInBuffer = _bufferLeaseRequests.AsParallel().Any(req => req.Lease.Equals(request.Lease));
+            bool leaseExistsInCurrent = _slots[_currentSlot].DecidedValues.AsParallel().Any(lease => lease.Equals(request.Lease));
+            bool leaseExistsInPrevious = false;
+            if (_currentSlot > 1)
+            {
+                leaseExistsInPrevious = _slots[_currentSlot - 1].DecidedValues.AsParallel().Any(lease => lease.Equals(request.Lease));
+            }
+            if (leaseExistsInBuffer || leaseExistsInCurrent || leaseExistsInPrevious)
+            {
+                Console.WriteLine("Skipping request");
+                Monitor.Exit(this);
+                return new Empty();
+            }
+
+            Console.WriteLine("Added lease request to buffer.");
             _bufferLeaseRequests.Add(request);
 
             Monitor.Exit(this);

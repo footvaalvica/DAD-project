@@ -16,7 +16,11 @@ namespace TKVTransactionManager
 
         static private void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
         {
-            TimeSpan timeToGo = time - DateTime.Now.TimeOfDay;
+            TimeSpan timeToGo = TimeSpan.Zero;
+            if (time != TimeSpan.Zero)
+            {
+                timeToGo = time - DateTime.Now.TimeOfDay;
+            }
             if (timeToGo < TimeSpan.Zero)
             {
                 Console.WriteLine("Slot starting before finished server setup. Aborting...");
@@ -42,10 +46,13 @@ namespace TKVTransactionManager
                 return;
             }
             string processId = args[0];
-            TimeSpan startTime = TimeSpan.Parse(args[1]);
-            string host = args[2];
-            int port = int.Parse(args[3]);
-            bool debug = args.Length > 4 && args[4].Equals("debug");
+            string host = args[1];
+            int port = int.Parse(args[2]);
+            TimeSpan startTime = TimeSpan.Zero;
+            if (args.Length > 3)
+            {
+                startTime = TimeSpan.Parse(args[3]);
+            }
 
             // Data from config file
             TKVConfig config = Common.ReadConfig();
