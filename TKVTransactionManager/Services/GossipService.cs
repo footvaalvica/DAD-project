@@ -2,7 +2,7 @@
 
 namespace TKVTransactionManager.Services
 {
-    public class GossipService : TwoPhaseCommit.TwoPhaseCommitBase
+    public class GossipService : Gossip.GossipBase
     {
         private readonly ServerService serverService;
 

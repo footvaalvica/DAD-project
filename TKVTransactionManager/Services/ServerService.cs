@@ -24,7 +24,7 @@ namespace TKVTransactionManager.Services
         private readonly List<List<string>>
             _tmsSuspectedPerSlot; // processes that this TM suspects to be crashed PER slot
 
-        private readonly Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> _transactionManagers;
+        private readonly Dictionary<string, Gossip.GossipClient> _transactionManagers;
         private readonly LeaseManagers _leaseManagers;
         private readonly int _processIndex;
 
@@ -47,7 +47,7 @@ namespace TKVTransactionManager.Services
 
         public ServerService(
             string processId,
-            Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers,
+            Dictionary<string, Gossip.GossipClient> transactionManagers,
             LeaseManagers leaseManagers,
             List<List<bool>> tmsStatePerSlot,
             List<List<string>> tmsSuspectedPerSlot,
@@ -294,7 +294,7 @@ namespace TKVTransactionManager.Services
                  If we don't receive a majority, we'll have to wait for the next slot to try again.
                  Once they have replied saying that they received the transaction, we'll tell them to execute it.
 
-                 We could just tell them to execute and wait for a majority to execute? We probably don't need two phases.
+                 We could just tell them to execute and wait for a majority to execute? We probably don't need two phases. 
               */
 
             // send transaction to all other TMs via some special pipelined command that skips some steps and currently doesnt exist

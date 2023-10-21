@@ -4,6 +4,8 @@ package TransactionManager_TransactionManagerProto;
 
 import "Transaction.proto";
 
+// TODO: maybe these things should have slot data? to check if they are the same?
+
 service Gossip {
 	rpc Gossip (GossipRequest) returns (GossipResponse) {}
 	rpc Update (UpdateRequest) returns (UpdateResponse) {}
@@ -17,3 +19,8 @@ message GossipResponse {
 	bool ok = 1;
 }
 
+message UpdateRequest {}
+
+message UpdateResponse {
+	repeated DADInt transaction = 1;
+}

@@ -54,9 +54,9 @@ namespace TKVTransactionManager
             (int slotDuration, TimeSpan startTime) = config.SlotDetails;
 
             // TransactionManager <-> TransactionManager 
-            Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers = config.TransactionManagers.ToDictionary(
+            Dictionary<string, Gossip.GossipClient> transactionManagers = config.TransactionManagers.ToDictionary(
                 key => key.Id,
-                value => new TwoPhaseCommit.TwoPhaseCommitClient(GrpcChannel.ForAddress(value.Url))
+                value => new Gossip.GossipClient(GrpcChannel.ForAddress(value.Url))
             );
             // TransactionManager  <-> LeaseManager 
             Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers = config.LeaseManagers.ToDictionary(
@@ -112,7 +112,7 @@ namespace TKVTransactionManager
             {
                 Services = {
                     Client_TransactionManagerService.BindService(new TMService(serverService)),
-                    TwoPhaseCommit.BindService(new GossipService(serverService)),
+                    Gossip.BindService(new GossipService(serverService)),
                 },
                 Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
             };
