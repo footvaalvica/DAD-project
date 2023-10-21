@@ -1,4 +1,5 @@
-﻿using TransactionManagerTransactionManagerProto;
+﻿using Grpc.Core;
+using TransactionManagerTransactionManagerProto;
 
 namespace TKVTransactionManager.Services
 {
@@ -9,6 +10,16 @@ namespace TKVTransactionManager.Services
         public GossipService(ServerService serverService)
         {
             this.serverService = serverService;
+        }
+
+        public override Task<GossipResponse> Gossip(GossipRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.receiveGossip(request));
+        }
+
+        public override Task<UpdateResponse> Update(UpdateRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.replyWithUpdate(request));
         }
     }
 }

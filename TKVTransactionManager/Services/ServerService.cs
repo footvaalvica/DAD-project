@@ -303,12 +303,14 @@ namespace TKVTransactionManager.Services
             // when the majority of TMs reply back, we then tell all TMs to execute the transaction
         }
 
-        public void receiveGossip()
+        public GossipResponse receiveGossip(GossipRequest request)
         {
             /* TODO: When a gossip request is received we first reply to the TM saying that we have received it and that we can execute it.
                  After they reply back saying we can execute the transaction and add it to our log.
                  If it any point they don't reply back, we assume that they are crashed and do nothing.
              */
+
+            return new GossipResponse { Ok = true };
         }
 
         public void updateTransactionLogStatus()
@@ -320,6 +322,13 @@ namespace TKVTransactionManager.Services
                  We do this by deleting everything we have and rebuilding it from the latest one.
                  This is very slow, but it's the simplest way to do it and I frankly don't care anymore.
              */
+        }
+
+        public UpdateResponse replyWithUpdate(UpdateRequest request)
+        {
+            /* TODO: When we receive an update request, we need to reply back with our log. */
+
+            return new UpdateResponse();
         }
     }
 }

@@ -105,7 +105,7 @@ namespace TKVTransactionManager
 
             }
             int processIndex = config.TransactionManagers.FindIndex(x => x.Id == processId);
-
+                
             ServerService serverService = new(processId, transactionManagers, leaseManagers, tmsStatePerSlot, tmsSuspectedPerSlot, processIndex);
 
             Server server = new Server
