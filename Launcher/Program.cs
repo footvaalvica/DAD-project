@@ -18,7 +18,7 @@ namespace Launcher
             return Process.Start(processInfo);
         }
 
-        static Process CreateProcess(string baseDirectory, string[] configArgs)
+        static Process CreateProcess(string baseDirectory, TimeSpan starttime, string[] configArgs)
         {
             var clientPath = Path.Combine(baseDirectory, "TKVClient", "bin", "Debug", "net6.0", "TKVClient.exe");
             var transactionManagerPath = Path.Combine(baseDirectory, "TKVTransactionManager", "bin", "Debug", "net6.0", "TKVTransactionManager.exe");
@@ -32,7 +32,7 @@ namespace Launcher
                 case "C":
                     var script = configArgs[3];
                     Console.WriteLine("Starting client " + id + " with script " + script);
-                    return StartProcess(clientPath, id + " " + script);
+                    return StartProcess(clientPath, id + " " + script + " " + starttime);
                 case "T":
                 case "L":
                     var url = configArgs[3].Remove(0, 7);
@@ -43,11 +43,11 @@ namespace Launcher
 
                     if (processType.Equals("T"))
                     {
-                        return StartProcess(transactionManagerPath, id + " " + host + " " + port);
+                        return StartProcess(transactionManagerPath, id + " " + host + " " + port + " " + starttime);
                     }
                     else
                     {
-                        return StartProcess(leaseManagerPath, id + " " + host + " " + port);
+                        return StartProcess(leaseManagerPath, id + " " + host + " " + port + " " + starttime);
                     }
                 default:
                     throw new Exception("Invalid config file");
@@ -58,6 +58,7 @@ namespace Launcher
         {
             string baseDirectory = Common.GetSolutionDirectory();
             var configPath = Path.Join(baseDirectory, "Launcher", "config.txt");
+            TimeSpan starttime = DateTime.Now.TimeOfDay.Add(TimeSpan.FromSeconds(10));
 
             if (!File.Exists(configPath))
             {
@@ -71,7 +72,7 @@ namespace Launcher
                 
                 if (configArgs[0].Equals("P"))
                 {
-                    CreateProcess(baseDirectory, configArgs);
+                    CreateProcess(baseDirectory, starttime, configArgs);
                 }
             }
         }

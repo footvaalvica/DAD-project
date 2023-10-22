@@ -2,6 +2,7 @@
 using Utilities;
 using ClientTransactionManagerProto;
 using System.Text.RegularExpressions;
+using Grpc.Core;
 
 namespace TKVClient
 {
@@ -17,9 +18,28 @@ namespace TKVClient
                 if (command.Length == 2)
                 {
                     Console.WriteLine("Waiting for " + command[1] + " milliseconds...");
-                    Thread.Sleep(int.Parse(command[1]));
+
+                    int millisecondsToWait = int.Parse(command[1]);
+                    DateTime startTime = DateTime.Now;
+                    // Wait loop
+                    while ((DateTime.Now - startTime).TotalMilliseconds < millisecondsToWait)
+                    {
+                        // Check for key press
+                        if (Console.KeyAvailable)
+                        {
+                            Console.WriteLine("Key pressed. Wait interrupted.");
+                            return;
+                        }
+
+                        //Sleep for a shorter interval to make the check more responsive
+                        Thread.Sleep(100);
+                    }
+                    Console.WriteLine("Wait completed.");
                 }
-                else { Console.WriteLine("No time amount provided for wait."); }
+                else
+                {
+                    Console.WriteLine("No time amount provided for wait.");
+                }
             }
             catch (FormatException)
             {
@@ -160,8 +180,6 @@ namespace TKVClient
 
             switch (commandArgs[0].ToLower())
             {
-                case "#":
-                    break;
                 case "w":
                     Console.WriteLine("Client set to wait...");
                     Wait(commandArgs);
@@ -196,8 +214,12 @@ namespace TKVClient
             }
             string processId = args[0];
             string scriptName = args[1];
-            bool debug = args.Length > 2 && args[2].Equals("debug");
-
+            TimeSpan startTime = TimeSpan.Zero;
+            if (args.Length > 2)
+            {
+                startTime = TimeSpan.Parse(args[2]);
+            }
+                
             Console.WriteLine($"TKVClient with id ({processId}) starting...");
 
             try { config = Common.ReadConfig(); }
@@ -207,7 +229,7 @@ namespace TKVClient
                 return;
             }
 
-            (int slotDuration, TimeSpan startTime) = config.SlotDetails;
+            (int slotDuration, _) = config.SlotDetails;
 
             // Process data from config file
             transactionManagers = config.TransactionManagers.ToDictionary(key => key.Id, value =>
@@ -229,16 +251,37 @@ namespace TKVClient
                 return;
             }
 
-            // Wait for slots to start
-            //if (DateTime.Now.TimeOfDay < startTime) // TODO: change before submission
-            //{
-            //    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
-            //}
+            if (startTime != TimeSpan.Zero)
+            {
+                // Wait for slots to start
+                if (DateTime.Now.TimeOfDay < startTime)
+                {
+                    System.Threading.Thread.Sleep(startTime - DateTime.Now.TimeOfDay);
+                }
+            }
 
-            foreach (string command in commands) { HandleCommand(command, processId, transactionManagers); }
+            // handle commands from script file while client is running
 
-            Console.WriteLine("Press q to exit.");
-            while (Console.ReadKey().Key != ConsoleKey.Q) { };
+            Console.WriteLine("Press any key to exit.");
+
+            while (!Console.KeyAvailable)
+            {
+                foreach (string command in commands)
+                {
+                    if (!command[0].Equals('#'))
+                    {
+                        Console.WriteLine("Command: " + command);
+                        HandleCommand(command, processId, transactionManagers);
+                    }                  
+                }
+
+                // Read commands from the file and continue the loop
+                commands = File.ReadAllLines(scriptFilePath);
+            }
+
+            // Optional: Read the key to clear the input buffer and exit
+            Console.ReadKey(intercept: true);
+
         }
     }
 }

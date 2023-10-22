@@ -48,8 +48,10 @@ namespace TKVLeaseManager.Services
         private readonly List<List<ProcessState>> _statePerSlot;
         private readonly List<string> _processBook;
         private readonly ConcurrentDictionary<int, SlotData> _slots;
-        private string? _leader = null; // TO CHECK AFTER CHECKPOINT
-        private List<LeaseRequest> _bufferLeaseRequests = new();
+        private int _leader = 0; // TO CHECK AFTER CHECKPOINT
+        private volatile List<LeaseRequest> _bufferLeaseRequests = new();
+        private volatile bool _isDeciding = false;
+        private List<string> _badHosts = new();
 
         public LeaseManagerService(
             int processId,
@@ -87,18 +89,25 @@ namespace TKVLeaseManager.Services
                 return;
             }
             
-            Console.WriteLine("Preparing new slot -----------------------");
+            Console.WriteLine("========== Preparing new slot =========================");
 
             //Console.WriteLine($"Have ({_bufferLeaseRequests.Count}) requests to process for this slot");
 
             // Switch process state
             _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
             // _processId % _leaseManagerHosts.Count -> since we increment processId every slot, we need to do this operation to guarantee that the index is always between 0 and #LMs - 1
-            Console.WriteLine($"Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}");
+            Console.WriteLine($"State: Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}\n");
 
             if (_currentSlot > 0)
             {
                 _slots[_currentSlot].IsPaxosRunning = false;
+            }
+
+            _badHosts.Clear();
+            for (int i = 0; i < _processBook.Count; i++)
+            {
+                if (_statePerSlot[_currentSlot][i].Crashed)
+                    _badHosts.Add(_processBook[i]);
             }
 
             Monitor.PulseAll(this);
@@ -112,7 +121,9 @@ namespace TKVLeaseManager.Services
             // Every slot increase processId to allow progress when the system configuration changes
             _processId += _leaseManagerHosts.Count;
 
-            Console.WriteLine("Ending preparation -----------------------");
+            _isDeciding = false;
+
+            //Console.WriteLine("Ending preparation -----------------------");
             Monitor.Exit(this);
         }
 
@@ -194,6 +205,7 @@ namespace TKVLeaseManager.Services
             {
                 Monitor.Wait(this);
             }
+            _isDeciding = true;
 
             var slot = _slots[request.Slot];
 
@@ -228,6 +240,7 @@ namespace TKVLeaseManager.Services
                 if (requestFrequency.Value < majority) continue;
                 slot.DecidedValues = requestFrequency.Key.Item2;
                 slot.IsPaxosRunning = false;
+                _isDeciding = false;
                 Monitor.PulseAll(this);
             }
 
@@ -237,7 +250,7 @@ namespace TKVLeaseManager.Services
             foreach (Lease lease in request.Leases)
             {
                 // Remove Lease request that contains this lease if the request is in the buffer
-                _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => leaseRequest.Lease.Equals(lease)).ToList(); // TODO - CHECK AFTER CHECKPOINT: not very concurrency friendly
+                _bufferLeaseRequests = _bufferLeaseRequests.Where(leaseRequest => !leaseRequest.Lease.Equals(lease)).ToList();
             }
             //Console.WriteLine("Finished removing requests from buffer");
 
@@ -264,15 +277,8 @@ namespace TKVLeaseManager.Services
 
             List<PromiseReply> promiseResponses = new();
 
-            List<string> badHosts = new();
-            for (int i = 0; i < _processBook.Count; i++)
-            {
-                if (_statePerSlot[slot][i].Crashed)
-                    badHosts.Add(_processBook[i]);
-            }
-
             List<Task> tasks = new();
-            foreach (var host in _leaseManagerHosts.Where(host => !badHosts.Contains(host.Key)
+            foreach (var host in _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
                 && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key)))
             {
                 var t = Task.Run(() =>
@@ -311,18 +317,11 @@ namespace TKVLeaseManager.Services
             };
             acceptRequest.Leases.AddRange(lease);
 
-            List<string> badHosts = new();
-            for (int i = 0; i < _processBook.Count; i++)
-            {
-                if (_statePerSlot[slot][i].Crashed)
-                    badHosts.Add(_processBook[i]);
-            }
-
             //Console.WriteLine($"({slot}) Sending Accept({leaderId % _leaseManagerHosts.Count},{lease})");
 
             var acceptResponses = new List<AcceptedReply>();
 
-            var tasks = _leaseManagerHosts.Where(host => !badHosts.Contains(host.Key)
+            var tasks = _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
                 && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
                 {
@@ -362,15 +361,9 @@ namespace TKVLeaseManager.Services
             };
             decideRequest.Leases.AddRange(lease);
 
-            List<string> badHosts = new();
-            for (int i=0; i<_processBook.Count; i++)
-            {
-                if (_statePerSlot[slot][i].Crashed)
-                    badHosts.Add(_processBook[i]);
-            }
-
             //Console.WriteLine($"({slot}) Sending Decide({writeTimestamp},{lease})");
-            foreach (var t in _leaseManagerHosts.Where(host => host.Key != _processName && !badHosts.Contains(host.Key)
+            // send decide to self (also a learner) and to other correct hosts
+            foreach (var t in _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
               && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
             {
@@ -437,29 +430,34 @@ namespace TKVLeaseManager.Services
                 return true;
             }
 
-            // 1: who's the leader?
-            var leader = int.MaxValue;
-            for (int i = 0; i < _statePerSlot[_currentSlot - 1].Count; i++)
+            if (_statePerSlot[_currentSlot][_leader].Crashed)
             {
-                // If process is normal and not suspected by it's successor
-                // A B C : B only becomes leader if C doesn't suspect it and all before are crashed
-                if (_statePerSlot[_currentSlot - 1][i].Crashed == false &&
-                    !_statePerSlot[_currentSlot - 1][i + 1].Suspects.Contains(_processBook[i]))
+                // 1: who's the leader?
+                var leader = int.MaxValue;
+                // all before and including the leader are crashed
+                for (int i = _leader + 1; i < _statePerSlot[_currentSlot - 1].Count; i++)
                 {
-                    leader = i;
-                    break;
+                    // If process is normal and not suspected by it's successor
+                    // A B C : B only becomes leader if C doesn't suspect it and all before are crashed
+                    if (_statePerSlot[_currentSlot][i].Crashed == false &&
+                        !_statePerSlot[_currentSlot][i + 1].Suspects.Contains(_processBook[i]))
+                    {
+                        leader = i;
+                        break;
+                    }
                 }
-            }
 
-            if (leader == int.MaxValue)
-            {
-                //Console.WriteLine("No leader found"); // Should never happen
-                Monitor.Exit(this);
-                return false;
+                if (leader == int.MaxValue)
+                {
+                    //Console.WriteLine("No leader found"); // Should never happen
+                    Monitor.Exit(this);
+                    return false;
+                }
+                _leader = leader;
             }
 
             // 2: am I the Leader?
-            if (_processId % _leaseManagerHosts.Count != leader)
+            if (_processId % _leaseManagerHosts.Count != _leader)
             {
                 //Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");
                 return WaitForPaxos(slot);
@@ -467,7 +465,7 @@ namespace TKVLeaseManager.Services
 
             //Console.WriteLine($"Starting Paxos slot in slot {_currentSlot} for slot {_currentSlot}");
 
-            Console.WriteLine($"Paxos leader is {leader} in slot {_currentSlot}");
+            Console.WriteLine($"Paxos leader is {_leader} in slot {_currentSlot}");
 
             // Save processId for current paxos slot otherwise it might change in the middle of paxos if a new slot begins
             var leaderCurrentId = _processId;
@@ -519,6 +517,10 @@ namespace TKVLeaseManager.Services
         public StatusUpdateResponse StatusUpdate()
         {
             Monitor.Enter(this);
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
 
             var slot = _currentSlot > 1 ? _slots[_currentSlot - 1] : _slots[_currentSlot];
 
@@ -538,7 +540,29 @@ namespace TKVLeaseManager.Services
         public Empty LeaseRequest(LeaseRequest request)
         {
             Monitor.Enter(this);
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
 
+            if (_isDeciding)
+                Monitor.Wait(this);
+
+            bool leaseExistsInBuffer = _bufferLeaseRequests.AsParallel().Any(req => req.Lease.Equals(request.Lease));
+            bool leaseExistsInCurrent = _slots[_currentSlot].DecidedValues.AsParallel().Any(lease => lease.Equals(request.Lease));
+            bool leaseExistsInPrevious = false;
+            if (_currentSlot > 1)
+            {
+                leaseExistsInPrevious = _slots[_currentSlot - 1].DecidedValues.AsParallel().Any(lease => lease.Equals(request.Lease));
+            }
+            if (leaseExistsInBuffer || leaseExistsInCurrent || leaseExistsInPrevious)
+            {
+                Console.WriteLine("Skipping request");
+                Monitor.Exit(this);
+                return new Empty();
+            }
+
+            Console.WriteLine("Added lease request to buffer.");
             _bufferLeaseRequests.Add(request);
 
             Monitor.Exit(this);
