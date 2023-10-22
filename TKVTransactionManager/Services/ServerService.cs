@@ -244,8 +244,11 @@ namespace TKVTransactionManager.Services
                  Then we are done! Just to do this for all transactions that we have stored.
              */
 
-            // TODO: Store the transactions somewhere until the next turn if we can't execute them (is this done automatically by the foreach loop below?).
-            // TODO: Before we execute and gossip we need to make sure all conditions are okay!
+            // TODO: Store the transactions somewhere until the next turn if we can't execute them (is this done automatically by the foreach loop below?). - I think it is, since we are removing
+            // the ones we execute, only the ones we can't execute will remain in the list
+
+
+            // TODO: Before we execute and gossip (2pc) we need to make sure all conditions are okay!
 
             // this bit of code checks for the transactions that we can execute because we have all the leases required (does it?).
             foreach (var transactionState in _transactionsState.Where(transactionsState => transactionsState.Leases.Count == 0))
@@ -272,7 +275,7 @@ namespace TKVTransactionManager.Services
                 {
                     try
                     {
-                        PrepareResponse prepareResponse = _transactionManagers[host.Key].Prepare(new PrepareRequest());
+                        PrepareResponse prepareResponse = _transactionManagers[host.Key].Prepare(new PrepareRequest()); // should we send to all TM or ignore the crashed ones?
                         prepareResponses.Add(prepareResponse);
                     }
                     catch (Grpc.Core.RpcException e)
@@ -306,7 +309,7 @@ namespace TKVTransactionManager.Services
                     {
                         CommitRequest commitRequest = new();
                         commitRequest.Writes.AddRange(transactionState.Request.Writes);
-                        CommitResponse commitResponse = _transactionManagers[host.Key].Commit(commitRequest);
+                        CommitResponse commitResponse = _transactionManagers[host.Key].Commit(commitRequest); // should we send to all TM or ignore the crashed ones?
                     }
                     catch (Grpc.Core.RpcException e)
                     {
@@ -316,13 +319,13 @@ namespace TKVTransactionManager.Services
                 });
                 tasks.Add(t);
             }
-            // if we get here we execute the transaction
-            WriteTransactions(transactionState.Request.Writes);
+            // if we get here we execute the transactions
+            ExecuteTransaction(transactionState);
         }
 
         public PrepareResponse ReplyWithPrepare()
         {
-            // if we get prepare request, we reply with ok
+            // if we get prepare request, we reply with ok - should we check anything here?
             return new PrepareResponse {};
         }
 
@@ -347,9 +350,13 @@ namespace TKVTransactionManager.Services
             }
 
             WriteTransactions(transactionState.Request.Writes);
+
+            // after we execute the transaction we remove it from the list of transactions that we want to execute
+            _transactionsState.Remove(transactionState); // should just be this no?
+
             // TODO: line below is sus but something like that is needed
             ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
-            // TODO: we need to warn the TM that asked us for the things! We do it now I think.
+            // TODO: we need to warn the TM that asked us for the things! We do it now I think. - warn them about what?
             
         }
 
@@ -420,7 +427,7 @@ namespace TKVTransactionManager.Services
         public GossipResponse ReceiveGossip(GossipRequest request)
         {
             /* When a gossip request is received we first reply to the TM saying that we have received it and that we will execute it.
-                Do we need two phases here? We have to think about it.
+                Do we need two phases here? We have to think about it. - ye i think we need -> implemented above
              */
 
             // TODO: Think of possible failure cases.
