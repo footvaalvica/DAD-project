@@ -228,7 +228,9 @@ namespace TKVTransactionManager.Services
                 }
             }
 
-            /* TODO: Look through all transactions that we want to execute and check if we have all the leases required to execute them.
+            /* ! Description of the algorithm and TODO list:
+
+                 Look through all transactions that we want to execute and check if we have all the leases required to execute them.
                  If not, too bad! We'll store them somewhere and wait for the next slot to try again.
                  If the lease manager assign two or more leases to the same key in one slot, we'll have to wait for the other lease to execute before we execute ours. (We'll be warned by that TM)
                  If we're not warned by the other TM within that slot, we can assume that the other TM is crashed and we can execute our transaction in the next slot.
@@ -238,14 +240,13 @@ namespace TKVTransactionManager.Services
                  Then we are done! Just to do this for all transactions that we have stored.
              */
 
-            // TODO: Store the transactions somewhere until the next turn if we can't execute them
-            // todo: wait before executing if conflicting leases
+            // TODO: Store the transactions somewhere until the next turn if we can't execute them (is this done automatically by the foreach loop below?).
+            // TODO: Before we execute and gossip we need to make sure all conditions are okay!
 
             // this bit of code checks for the transactions that we can execute because we have all the leases required (does it?).
             foreach (var transactionState in _transactionsState.Where(transactionsState => transactionsState.Leases.Count == 0))
             {
-                // TODO: Before we execute and gossip we need to make sure all conditions are okay!
-                // TODO: in the case of two leases in the same slot, we verify it here!
+                // TODO: In the case of two leases in the same slot, we verify it here! (implemented via some wait mechanism)
                 GossipTransaction(transactionState);
                 ExecuteTransaction(transactionState);
             }
@@ -269,7 +270,6 @@ namespace TKVTransactionManager.Services
             WriteTransactions(transactionState.Request.Writes);
             // TODO: line below is sus but something like that is needed
             ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
-            // TODO: Store the transactions somewhere until the next turn if we can't execute them
         }
 
         private void WriteTransactions(RepeatedField<DADInt> writes)
@@ -402,11 +402,12 @@ namespace TKVTransactionManager.Services
             // give up all the leases that we hold
             _leasesHeld = new List<Lease>();
 
-            // TODO: completely reset the state of the TM
+            // TODO: completely reset the state of the TM (is this enough?)
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _dadIntsRead = new List<DADInt>();
             _transactionsState = new List<TransactionState>();
-
+            
+            // TODO: is this enough to recover the state of the TM?
             // rewrite all the transactions that in the _writeLog
             var updateResponseWriteLog = updateResponse.Writes;
             WriteTransactions(updateResponseWriteLog);
