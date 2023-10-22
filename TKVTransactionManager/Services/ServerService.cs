@@ -3,6 +3,7 @@ using TransactionManagerLeaseManagerServiceProto;
 using ClientTransactionManagerProto;
 using Google.Protobuf.WellKnownTypes;
 using System.Transactions;
+using Google.Protobuf.Collections;
 
 namespace TKVTransactionManager.Services
 {
@@ -43,7 +44,7 @@ namespace TKVTransactionManager.Services
 
         private List<TransactionState> _transactionsState;
 
-        private List<TransactionState> _transactionsLedger;
+        private List<DADInt> _writeLog;
 
         public ServerService(
             string processId,
@@ -63,12 +64,13 @@ namespace TKVTransactionManager.Services
 
             _isCrashed = false;
             _currentSlot = 0;
-            _transactionManagerDadInts = new();
+            _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _leasesHeld = new List<Lease>();
 
             _allLeases = false;
             _dadIntsRead = new List<DADInt>();
             _transactionsState = new List<TransactionState>();
+            _writeLog = new List<DADInt>();
         }
 
         public void PrepareSlot()
@@ -105,6 +107,9 @@ namespace TKVTransactionManager.Services
             Console.WriteLine("Requesting a Paxos Update");
             AskForLeaseManagersStatus();
 
+            Console.WriteLine("Updating Transaction Log");
+            UpdateTransactionLogStatus();
+
             Monitor.Exit(this);
         }
  
@@ -118,25 +123,14 @@ namespace TKVTransactionManager.Services
         {
             if (_isCrashed) { Monitor.Wait(this); }
 
-            var leasesRequired = new List<string>();
             _dadIntsRead = new List<DADInt>();
 
-            var transactionState = new TransactionState { Leases = new(), Request = transactionRequest };
+            var transactionState = new TransactionState { Leases = new List<string>(), Request = transactionRequest };
 
             Console.WriteLine($"Received transaction request FROM: {transactionRequest.Id}");
 
-            foreach (var dadintKey in transactionRequest.Reads)
-            {
-                //Console.WriteLine($"     DADINT2READ: {dadintKey}");
-                // add to leasesRequired
-                leasesRequired.Add(dadintKey);
-            }
-
-            foreach (var dadint in transactionRequest.Writes)
-            {
-                //Console.WriteLine($"     DADINT2RWRITE: {dadint.Key}:{dadint.Value}");
-                leasesRequired.Add(dadint.Key);
-            }
+            var leasesRequired = transactionRequest.Reads.ToList();
+            leasesRequired.AddRange(transactionRequest.Writes.Select(dadint => dadint.Key));
 
             // check if has all leases
             transactionState.Leases = leasesRequired
@@ -234,18 +228,6 @@ namespace TKVTransactionManager.Services
                 }
             }
 
-            // TODO: Store the transactions somewhere until the next turn if we can't execute them
-            // todo: wait before executing if conflicting leases
-
-            // this bit of code checks for the transactions that we can execute because we have all the leases required (does it?).
-            foreach (var transactionState in _transactionsState.Where(transactionsState => transactionsState.Leases.Count == 0))
-            {
-                // TODO: Before we execute and gossip we need to make sure all conditions are okay!
-                GossipTransaction(transactionState);
-                ExecuteTransaction(transactionState);
-            }
-
-
             /* TODO: Look through all transactions that we want to execute and check if we have all the leases required to execute them.
                  If not, too bad! We'll store them somewhere and wait for the next slot to try again.
                  If the lease manager assign two or more leases to the same key in one slot, we'll have to wait for the other lease to execute before we execute ours. (We'll be warned by that TM)
@@ -256,12 +238,24 @@ namespace TKVTransactionManager.Services
                  Then we are done! Just to do this for all transactions that we have stored.
              */
 
+            // TODO: Store the transactions somewhere until the next turn if we can't execute them
+            // todo: wait before executing if conflicting leases
+
+            // this bit of code checks for the transactions that we can execute because we have all the leases required (does it?).
+            foreach (var transactionState in _transactionsState.Where(transactionsState => transactionsState.Leases.Count == 0))
+            {
+                // TODO: Before we execute and gossip we need to make sure all conditions are okay!
+                // TODO: in the case of two leases in the same slot, we verify it here!
+                GossipTransaction(transactionState);
+                ExecuteTransaction(transactionState);
+            }
+
             Monitor.Exit(this);
         }
 
         public void ExecuteTransaction(TransactionState transactionState)
         {
-            Console.WriteLine($"    Finally executing transaction...");
+            Console.WriteLine($"Finally executing transaction...");
             foreach (var dadintKey in transactionState.Request.Reads)
             {
                 if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
@@ -272,50 +266,58 @@ namespace TKVTransactionManager.Services
                 }
             }
 
-            foreach (var dadint in transactionState.Request.Writes)
+            WriteTransactions(transactionState.Request.Writes);
+            // TODO: line below is sus but something like that is needed
+            ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
+            // TODO: Store the transactions somewhere until the next turn if we can't execute them
+        }
+
+        private void WriteTransactions(RepeatedField<DADInt> writes)
+        {
+            foreach (var dadint in writes)
             {
                 if (_transactionManagerDadInts.TryGetValue(dadint.Key, out var j))
                 {
                     try
                     {
-                        GossipTransaction(dadint);
                         j.Value = dadint.Value;
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine(e);
-                        continue; // gossip unsuccessful, skip this write and continue with the next one
                     }
                 }
                 else
                 {
-                    _transactionManagerDadInts.Add(dadint.Key, dadint);
+                    _transactionManagerDadInts.Add(dadint.Key, new DADInt { Key = dadint.Key, Value = dadint.Value });
                 }
+
+                _writeLog.Add(dadint);
             }
-            ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
-            // TODO: Store the transactions somewhere until the next turn
-            // todo: wait before executing if conflicting leases
         }
 
-
-        public void GossipTransaction(DADInt dadint)
+        public void GossipTransaction(TransactionState transaction)
         {
-            /* TODO: This is just a matter of sending a transaction to all other TMs.
+            /* This is just a matter of sending the write part of a transaction to all other TMs.
                  Once they have replied saying that a majority of them executed the transaction, we can execute it.
-
                  Do we need two phases here? We have to think about it.
               */
 
             Console.WriteLine($"    Gossiping transaction...");
-            List<Task> tasks = new List<Task>();
-            List<GossipResponse> responses = new List<GossipResponse>();
+            var tasks = new List<Task>();
+            var responses = new List<GossipResponse>();
+
+            // via this special pipeline, we only send the write set of the transaction
+            var dadint = transaction.Request.Writes;
             foreach (var host in _transactionManagers)
             {
                 var t = Task.Run(() =>
                 {
                     try
                     {
-                        GossipResponse gossipResponse = _transactionManagers[host.Key].Gossip(new GossipRequest { Transaction = dadint}); // should we send to all TM or ignore the crashed ones?
+                        GossipRequest gossipRequest = new();
+                        gossipRequest.Writes.AddRange(dadint);
+                        var gossipResponse = _transactionManagers[host.Key].Gossip(gossipRequest); // should we send to all TM or ignore the crashed ones?
                         responses.Add(gossipResponse);
                     }
                     catch (Grpc.Core.RpcException e)
@@ -327,53 +329,29 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
 
-            foreach(GossipResponse response in responses)
+            for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
             {
-                if (response.Ok)
-                {
-                    Console.WriteLine("     Gossip successful.");
-                }
-                else
-                {
-                    throw new Exception("Gossip failed.");
-                }
+                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
-            
-            // if we get here all gossips were successful and therefore we can execute the transaction
-
-            
-
-            // send transaction to all other TMs via some special pipelined command that skips some steps and currently doesnt exist
-            // other TMs check if they can execute that transaction (they don't need leases? they should check if we have the lease? ig) could be skipped probably
-            // because we know that we have all the leases required to execute the transaction
-            // when the majority of TMs reply back, we then tell all TMs to execute the transaction
+            Console.WriteLine($"Gossiping transaction... Done!");
         }
 
         public GossipResponse ReceiveGossip(GossipRequest request)
         {
-            /* TODO: When a gossip request is received we first reply to the TM saying that we have received it and that we will execute it.
-             Do we need two phases here? We have to think about it.
+            /* When a gossip request is received we first reply to the TM saying that we have received it and that we will execute it.
+                Do we need two phases here? We have to think about it.
              */
 
+            // TODO: Think of possible failure cases.
 
-            // ! something like this should be enough!
-            // should we execute the transaction immediately or do like a 2pc?
-            if (_transactionManagerDadInts.TryGetValue(request.Transaction.Key, out var j))
-            {
-                    request.Transaction.Value = request.Transaction.Value;
-            }
-            else
-            {            
-                _transactionManagerDadInts.Add(request.Transaction.Key, new DADInt { Key = request.Transaction.Key, Value = request.Transaction.Value });
-
-            }
+            WriteTransactions(request.Writes);
 
             return new GossipResponse { Ok = true };
         }
 
         public void UpdateTransactionLogStatus()
         {
-            /* TODO: When we begin a new slot, we ask a majority of process for their logs, one of them is the latest one!
+            /* When we begin a new slot, we ask a majority of process for their written transaction logs, one of them is the latest one!
                  The latest one is the biggest one, so we just need to compare the sizes of the logs.
                  If it's different from ours, we need to update our log to the latest one!
                  We also need to give up all the leases that we hold.
@@ -382,16 +360,64 @@ namespace TKVTransactionManager.Services
              */
 
             // ask for logs from all other TMs and wait for a majority of them to reply
+            var tasks = new List<Task>();
+            var responses = new List<UpdateResponse>();
+
+            foreach (var host in _transactionManagers)
+            {
+                var t = Task.Run(() =>
+                {
+                    try
+                    {
+                        var updateResponse = _transactionManagers[host.Key].Update(new UpdateRequest());
+                        responses.Add(updateResponse);
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+                    return Task.CompletedTask;
+                });
+                tasks.Add(t);
+            }
+            
+            // wait for a majority of them to reply
+            for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
+            {
+                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+            }
+
             // compare the sizes of the logs and get the biggest one
-            // update our log to the biggest one
-            // give up all leases that we hold
+            var biggestLog = responses.Aggregate((i1, i2) => i1.Writes.Count > i2.Writes.Count ? i1 : i2);
+
+            // if the biggest one is different from ours and if they logs is not empty, we need to update our log to the latest one
+            if (biggestLog.Writes.Count != _writeLog.Count && biggestLog.Writes.Count != 0)
+            {
+                UpdateLocalLog(biggestLog);
+            }
+        }
+
+        public void UpdateLocalLog(UpdateResponse updateResponse)
+        {
+            // give up all the leases that we hold
+            _leasesHeld = new List<Lease>();
+
+            // TODO: completely reset the state of the TM
+            _transactionManagerDadInts = new Dictionary<string, DADInt>();
+            _dadIntsRead = new List<DADInt>();
+            _transactionsState = new List<TransactionState>();
+
+            // rewrite all the transactions that in the _writeLog
+            var updateResponseWriteLog = updateResponse.Writes;
+            WriteTransactions(updateResponseWriteLog);
         }
 
         public UpdateResponse ReplyWithUpdate(UpdateRequest request)
         {
-            /* TODO: When we receive an update request, we need to reply back with our log. */
-
-            return new UpdateResponse();
+            /* When we receive an update request, we need to reply back with our write log. */
+            var updateResponse = new UpdateResponse();
+            updateResponse.Writes.AddRange(_writeLog);
+            return updateResponse;
         }
     }
 }

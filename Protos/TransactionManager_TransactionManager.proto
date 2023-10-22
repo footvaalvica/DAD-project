@@ -12,7 +12,7 @@ service Gossip {
 }
 
 message GossipRequest {
-	DADInt transaction = 1;
+	repeated DADInt writes = 1;
 }
 
 message GossipResponse {
@@ -22,5 +22,5 @@ message GossipResponse {
 message UpdateRequest {}
 
 message UpdateResponse {
-	repeated DADInt transaction = 1;
+	repeated DADInt writes = 1;
 }

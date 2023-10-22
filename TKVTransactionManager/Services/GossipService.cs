@@ -14,12 +14,12 @@ namespace TKVTransactionManager.Services
 
         public override Task<GossipResponse> Gossip(GossipRequest request, ServerCallContext context)
         {
-            return Task.FromResult(serverService.receiveGossip(request));
+            return Task.FromResult(serverService.ReceiveGossip(request));
         }
 
         public override Task<UpdateResponse> Update(UpdateRequest request, ServerCallContext context)
         {
-            return Task.FromResult(serverService.replyWithUpdate(request));
+            return Task.FromResult(serverService.ReplyWithUpdate(request));
         }
     }
 }
