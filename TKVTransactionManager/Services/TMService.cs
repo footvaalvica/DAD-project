@@ -21,11 +21,5 @@ namespace TKVTransactionManager.Services
         {
             return Task.FromResult(serverService.TxSubmit(request));
         }
-
-        public override Task<SameSlotLeaseExecutionResponse> SameSlotLeaseExecution(
-            SameSlotLeaseExecutionRequest request, ServerCallContext context)
-        {
-            return Task.FromResult(serverService.SameSlotLeaseExecution(request));
-        }
     }
 }
