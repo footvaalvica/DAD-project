@@ -202,6 +202,8 @@ namespace TKVTransactionManager.Services
 
             // we are going to check for conflict leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
             // if the lease is in conflict, this TM should release the Lease it holds. 
+
+            // TODO: fix this bit of code! @creaai knows how! I don't!
             foreach (var lease in statusUpdateResponse.Leases)
             {
                 // Check if the lease is held by another process (TM)
@@ -246,7 +248,9 @@ namespace TKVTransactionManager.Services
             // this bit of code checks for the transactions that we can execute because we have all the leases required (does it?).
             foreach (var transactionState in _transactionsState.Where(transactionsState => transactionsState.Leases.Count == 0))
             {
-                // TODO: In the case of two leases in the same slot, we verify it here! (implemented via some wait mechanism)
+                // TODO: In the case of two leases in the same slot, we verify it here! 
+                // TODO: We ask the TM that has the lease that we want to tell us when they execute it!
+
                 GossipTransaction(transactionState);
                 ExecuteTransaction(transactionState);
             }
@@ -270,6 +274,8 @@ namespace TKVTransactionManager.Services
             WriteTransactions(transactionState.Request.Writes);
             // TODO: line below is sus but something like that is needed
             ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
+            // TODO: we need to warn the TM that asked us for the things! We do it now I think.
+            
         }
 
         private void WriteTransactions(RepeatedField<DADInt> writes)
@@ -419,6 +425,14 @@ namespace TKVTransactionManager.Services
             var updateResponse = new UpdateResponse();
             updateResponse.Writes.AddRange(_writeLog);
             return updateResponse;
+        }
+
+        // TODO: this method is for when a TM asks us to tell them when we execute a transaction that they have a lease for.
+        // TODO: what we do is we reply with the lease that they sent us to check
+        // TODO: mostly it's just a fancy wait mechanism
+        public SameSlotLeaseExecutionResponse SameSlotLeaseExecution(SameSlotLeaseExecutionRequest request)
+        {
+            return new SameSlotLeaseExecutionResponse();
         }
     }
 }

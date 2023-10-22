@@ -3,12 +3,13 @@ syntax = "proto3";
 package TransactionManager_TransactionManagerProto;
 
 import "Transaction.proto";
-
+import "LeaseType.proto";
 // TODO: maybe these things should have slot data? to check if they are the same?
 
 service Gossip {
 	rpc Gossip (GossipRequest) returns (GossipResponse) {}
 	rpc Update (UpdateRequest) returns (UpdateResponse) {}
+	rpc SameSlotLeaseExecution (SameSlotLeaseExecutionRequest) returns (SameSlotLeaseExecutionResponse) {}
 }
 
 message GossipRequest {
@@ -23,4 +24,12 @@ message UpdateRequest {}
 
 message UpdateResponse {
 	repeated DADInt writes = 1;
+}
+
+message SameSlotLeaseExecutionRequest {
+	Lease lease = 1;
+}
+
+message SameSlotLeaseExecutionResponse {
+	Lease lease = 1;
 }
