@@ -4,6 +4,7 @@ using ClientTransactionManagerProto;
 using Google.Protobuf.WellKnownTypes;
 using System.Transactions;
 using Google.Protobuf.Collections;
+using System.Threading.Tasks;
 
 namespace TKVTransactionManager.Services
 {
@@ -214,6 +215,7 @@ namespace TKVTransactionManager.Services
 
                     foreach (var tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))
                     {
+          
                         tsState.Leases.RemoveAll(leasePerm => lease.Permissions.Contains(leasePerm));
                     }
                     continue;
@@ -251,11 +253,84 @@ namespace TKVTransactionManager.Services
                 // TODO: In the case of two leases in the same slot, we verify it here! 
                 // TODO: We ask the TM that has the lease that we want to tell us when they execute it!
 
-                GossipTransaction(transactionState);
-                ExecuteTransaction(transactionState);
+                TwoPhaseCommit(transactionState);
+                //GossipTransaction(transactionState);
+                //ExecuteTransaction(transactionState);
             }
 
             Monitor.Exit(this);
+        }
+
+        public void TwoPhaseCommit(TransactionState transactionState)
+        {
+            Console.WriteLine("$Sending Prepare to all tms...");
+            List<Task> tasks = new List<Task>();
+            var prepareResponses = new List<PrepareResponse>();
+            foreach (var host in _transactionManagers)
+            {
+                var t = Task.Run(() =>
+                {
+                    try
+                    {
+                        PrepareResponse prepareResponse = _transactionManagers[host.Key].Prepare(new PrepareRequest());
+                        prepareResponses.Add(prepareResponse);
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+                    return Task.CompletedTask;
+                });
+                tasks.Add(t);
+            }
+
+            // wait for a majority of them to reply
+            for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
+            {
+                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+            }
+
+            // if not a majority of them replied with ok, we can't execute the transaction
+            if (prepareResponses.Count < _transactionManagers.Count / 2 + 1)
+            {
+                Console.WriteLine($"Not enough Prepare responses received. Aborting transaction.");
+                return;
+            }
+
+            // send commit to all TMs
+            foreach (var host in _transactionManagers)
+            {
+                var t = Task.Run(() =>
+                {
+                    try
+                    {
+                        CommitRequest commitRequest = new();
+                        commitRequest.Writes.AddRange(transactionState.Request.Writes);
+                        CommitResponse commitResponse = _transactionManagers[host.Key].Commit(commitRequest);
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+                    return Task.CompletedTask;
+                });
+                tasks.Add(t);
+            }
+            // if we get here we execute the transaction
+            WriteTransactions(transactionState.Request.Writes);
+        }
+
+        public PrepareResponse ReplyWithPrepare()
+        {
+            // if we get prepare request, we reply with ok
+            return new PrepareResponse {};
+        }
+
+        public CommitResponse CommitRequestReceived(CommitRequest commitRequest)
+        {
+            // if we get commit request, we execute the transactions received
+            WriteTransactions(commitRequest.Writes);
+            return new CommitResponse { Ok = true };
         }
 
         public void ExecuteTransaction(TransactionState transactionState)

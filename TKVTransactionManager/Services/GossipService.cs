@@ -25,5 +25,15 @@ namespace TKVTransactionManager.Services
         {
             return Task.FromResult(serverService.SameSlotLeaseExecution(request));
         }
+
+        public override Task<PrepareResponse> Prepare(PrepareRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.ReplyWithPrepare());
+        }
+
+        public override Task<CommitResponse> Commit(CommitRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.CommitRequestReceived(request));
+        }
     }
 }

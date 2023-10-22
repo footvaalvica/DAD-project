@@ -10,6 +10,8 @@ service Gossip {
 	rpc Gossip (GossipRequest) returns (GossipResponse) {}
 	rpc Update (UpdateRequest) returns (UpdateResponse) {}
 	rpc SameSlotLeaseExecution (SameSlotLeaseExecutionRequest) returns (SameSlotLeaseExecutionResponse) {}
+	rpc Prepare (PrepareRequest) returns (PrepareResponse) {}
+	rpc Commit (CommitRequest) returns (CommitResponse) {}
 }
 
 message GossipRequest {
@@ -32,4 +34,18 @@ message SameSlotLeaseExecutionRequest {
 
 message SameSlotLeaseExecutionResponse {
 	Lease lease = 1;
+}
+
+message PrepareRequest {
+}
+
+message PrepareResponse {
+}
+
+message CommitRequest {
+	repeated DADInt writes = 1;
+}
+
+message CommitResponse {
+	bool ok = 1;
 }
