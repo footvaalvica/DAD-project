@@ -322,10 +322,9 @@ namespace TKVTransactionManager.Services
                     _dadIntsRead.Add(dadint);
                 else
                 {
-                    // TODO: else what?
-                }
-                {
-                    Console.WriteLine("Requested read on non-existing DADINT.");
+                    // if dadint doesn't exist, create new dadInt with value = null
+                    var newDadInt = new DADInt { Key = dadintKey, Value = null };
+                    _dadIntsRead.Add(newDadInt);
                 }
             }
 
