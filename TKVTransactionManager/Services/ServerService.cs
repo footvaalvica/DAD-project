@@ -104,11 +104,12 @@ namespace TKVTransactionManager.Services
 
             Monitor.PulseAll(this);
 
+            Console.WriteLine("Updating Transaction Log");
+            UpdateTransactionLogStatus();
+
             Console.WriteLine("Requesting a Paxos Update");
             AskForLeaseManagersStatus();
 
-            Console.WriteLine("Updating Transaction Log");
-            UpdateTransactionLogStatus();
 
             Monitor.Exit(this);
         }
@@ -220,47 +221,90 @@ namespace TKVTransactionManager.Services
             // TODO: Store the transactions somewhere until the next turn if we can't execute them (is this done automatically by the foreach loop below?).
             // TODO: Before we execute and gossip we need to make sure all conditions are okay!
 
-            // this bit of code checks for the transactions that we can execute because we have all the leases required (does it?).
-            foreach (var transactionState in _transactionsState.Where(transactionsState => transactionsState.Leases.Count == 0))
-            {
-                // TODO: In the case of two leases in the same slot, we verify it here! 
-                // TODO: We ask the TM that has the lease that we want to tell us when they execute it!
+            CheckLeaseConflicts(statusUpdateResponse);
 
-                GossipTransaction(transactionState);
-                ExecuteTransaction(transactionState);
+            // foreach transaction state, check if we have all the leases required to execute it
+            foreach (var transactionState in _transactionsState)
+            {
+                // if we have all the leases required to execute it, we can execute it
+                if (transactionState.Leases.Count == 0)
+                {
+                    // get the list of leases required to execute the transaction
+                    var leasesRequired = transactionState.Request.Reads.ToList();
+                    leasesRequired.AddRange(transactionState.Request.Writes.Select(dadint => dadint.Key));
+
+                    var leasesToWaitOn = new List<Lease>();
+
+                    // TODO: not sure if iterating properly 🤔
+                    for (var i = 1; i < statusUpdateResponse.Leases.Count; i++)
+                    {
+                        var lease = statusUpdateResponse.Leases[i];
+                        var leaseToCheck = statusUpdateResponse.Leases[i - 1];
+
+                        // if any of the permissions match and the id is different, we need to wait on that TM
+                        if (leasesRequired.Any(leaseRequired => lease.Permissions.Contains(leaseRequired)) &&
+                            lease.Id != leaseToCheck.Id)
+                        {
+                            leasesToWaitOn.Add(leaseToCheck);
+                        }
+                    }
+                    
+                    // ask all TM that we need to wait on to tell us when they execute the lease that we want
+                    var tasks2 = new List<Task>();
+                    foreach (var leaseToWaitOn in leasesToWaitOn)
+                    {
+                        var t = Task.Run(() =>
+                        {
+                            try
+                            {
+                                var sameSlotLeaseExecutionRequest = new SameSlotLeaseExecutionRequest
+                                    { Lease = leaseToWaitOn };
+                                _transactionManagers[leaseToWaitOn.Id]
+                                    .SameSlotLeaseExecution(sameSlotLeaseExecutionRequest);
+                            }
+                            catch (Grpc.Core.RpcException e)
+                            {
+                                Console.WriteLine(e.Status);
+                            }
+                            return Task.CompletedTask;
+                        });
+                        tasks2.Add(t);
+                    }
+
+                    // wait for all of them to reply
+                    Task.WaitAll(tasks2.ToArray());
+
+                    GossipTransaction(transactionState);
+                    ExecuteTransaction(transactionState);
+                }
             }
 
             Monitor.Exit(this);
         }
 
+        /* TODO: check if this function does what it's supposed to do.
+         Firstly, we need to check if the lease was assigned to us. If it was, we add it to our list of leases held.
+         Secondly, we need to check if any of the permissions of the lease was assigned to somebody else. If it was, we remove it from our list of leases held.
+         Thirdly, it does not do anything if two leases with the same permissions are assigned in the same slot. We need to check for that and wait for the other TM to execute it.
+         */
         private void CheckLeaseConflicts(StatusUpdateResponse statusUpdateResponse)
         {
-            // TODO: fix this bit of code! @creaai knows how! I don't!
+            var leasesHeldBeforeRunning = _leasesHeld;
             foreach (var lease in statusUpdateResponse.Leases)
             {
-                // Check if the lease is held by another process (TM)
+                // if the lease was assigned to us, we add it to our list of leases held
                 if (lease.Id == _processId)
                 {
-                    //Console.WriteLine("     Adding new lease...");
                     _leasesHeld.Add(lease);
-
-                    foreach (var tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))
-                    {
-                        tsState.Leases.RemoveAll(leasePerm => lease.Permissions.Contains(leasePerm));
-                    }
-
-                    continue;
                 }
-
-                // Iterate through leases held by the current process
-                foreach (var heldLease in _leasesHeld.ToList()
-                             .Where(heldLease => lease.Permissions.Intersect(heldLease.Permissions).Any()))
+                else
                 {
-                    // Remove conflicting lease
-                    _leasesHeld.Remove(heldLease);
-
-                    // Exit inner loop since a conflicting lease was removed
-                    break;
+                    // if the lease was in leasesHeldBeforeRunning we remove it from our list of leases held
+                    // this guarantees that we do not mess with leases assigned in the same slot
+                    if (leasesHeldBeforeRunning.Contains(lease))
+                    {
+                        _leasesHeld.RemoveAll(leaseHeld => leaseHeld.Permissions.Contains(lease.Permissions[0]));
+                    }
                 }
             }
         }
@@ -274,7 +318,10 @@ namespace TKVTransactionManager.Services
                     _dadIntsRead.Add(dadint);
                 else
                 {
-                    Console.WriteLine("     Requested read on non-existing DADINT.");
+
+                }
+                {
+                    Console.WriteLine("Requested read on non-existing DADINT.");
                 }
             }
 
