@@ -204,8 +204,6 @@ namespace TKVTransactionManager.Services
             // we are going to check for conflict leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
             // if the lease is in conflict, this TM should release the Lease it holds. 
 
-            CheckLeaseConflicts(statusUpdateResponse);
-
             /* ! Description of the algorithm and TODO list:
 
                  Look through all transactions that we want to execute and check if we have all the leases required to execute them.
@@ -326,9 +324,9 @@ namespace TKVTransactionManager.Services
             }
 
             WriteTransactions(transactionState.Request.Writes);
-            // TODO: line below is sus but something like that is needed
+            // TODO: remove the leases of the transaction that we just executed from the list of leases held
             ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
-            // TODO: we need to warn the TM that asked us for the things! We do it now I think.
+            Monitor.PulseAll(this);
             
         }
 
@@ -447,6 +445,8 @@ namespace TKVTransactionManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
+            // TODO: we need to change this to get the biggest log that appears most often (there can be multiple logs with the same size)
+
             // compare the sizes of the logs and get the biggest one
             var biggestLog = responses.Aggregate((i1, i2) => i1.Writes.Count > i2.Writes.Count ? i1 : i2);
 
@@ -457,7 +457,7 @@ namespace TKVTransactionManager.Services
             }
         }
 
-        public void UpdateLocalLog(UpdateResponse updateResponse)
+        private void UpdateLocalLog(UpdateResponse updateResponse)
         {
             // give up all the leases that we hold
             _leasesHeld = new List<Lease>();
@@ -481,12 +481,19 @@ namespace TKVTransactionManager.Services
             return updateResponse;
         }
 
-        // TODO: this method is for when a TM asks us to tell them when we execute a transaction that they have a lease for.
-        // TODO: what we do is we reply with the lease that they sent us to check
-        // TODO: mostly it's just a fancy wait mechanism
+        // this method is for when a TM asks us to tell them when we execute a transaction that they have a lease for.
         public SameSlotLeaseExecutionResponse SameSlotLeaseExecution(SameSlotLeaseExecutionRequest request)
         {
-            return new SameSlotLeaseExecutionResponse();
+            // TODO: not sure if locks are needed here
+            // go to sleep
+            Monitor.Enter(this);
+            // wait for the lease that is in the request to not be in the list of leases held
+            while (_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(request.Lease.Permissions[0])))
+            {
+                // thread will be woken up by the monitorpulseall in the execute transaction method
+            }
+            Monitor.Exit(this);
+            return new SameSlotLeaseExecutionResponse { Lease = request.Lease };
         }
     }
 }
