@@ -167,12 +167,13 @@ namespace TKVTransactionManager.Services
                     tasks.Add(t);
                 }
             }
-            else
-            {
-                // TM has all leases so it can execute the transaction
-                GossipTransaction(transactionState);
-                ExecuteTransaction(transactionState);
-            }
+            // TODO: why is this here? it's also down below
+            ////else
+            ////{
+            ////    // TM has all leases so it can execute the transaction
+            ////    GossipTransaction(transactionState);
+            ////    ExecuteTransaction(transactionState);
+            ////}
 
             Console.WriteLine($"Finished processing transaction request...");
             var transactionResponse = new TransactionResponse();
@@ -330,6 +331,9 @@ namespace TKVTransactionManager.Services
 
             WriteTransactions(transactionState.Request.Writes);
             _transactionsState.Remove(transactionState);
+
+            // TODO: somehow remove the leases in conflict in the same slot
+
             Monitor.PulseAll(this);
         }
 
@@ -490,11 +494,24 @@ namespace TKVTransactionManager.Services
             // TODO: not sure if locks are needed here
             // go to sleep
             Monitor.Enter(this);
-            // wait for the lease that is in the request to not be in the list of leases held
-            while (_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(request.Lease.Permissions[0])))
+
+            /* TODO: get the transactionState that has the lease that is in the request
+             When that transactionState is not in _transactionsState anymore, we remove the lease in the request from _leasesHeld
+             */
+            var transactionState = _transactionsState.Find(transactionState => transactionState.Leases.Contains(request.Lease.Permissions[0]));
+            while (_transactionsState.Contains(transactionState))
             {
                 // thread will be woken up by the monitorpulseall in the execute transaction method
             }
+
+            // remove the lease in the request from _leasesHeld
+            _leasesHeld.RemoveAll(leaseHeld => leaseHeld.Permissions.Contains(request.Lease.Permissions[0]));
+
+            ////// wait for the lease that is in the request to not be in the list of leases held
+            ////while (_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(request.Lease.Permissions[0])))
+            ////{
+            ////    // thread will be woken up by the monitorpulseall in the execute transaction method
+            ////}
             Monitor.Exit(this);
             return new SameSlotLeaseExecutionResponse { Lease = request.Lease };
         }
