@@ -203,32 +203,7 @@ namespace TKVTransactionManager.Services
             // we are going to check for conflict leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
             // if the lease is in conflict, this TM should release the Lease it holds. 
 
-            // TODO: fix this bit of code! @creaai knows how! I don't!
-            foreach (var lease in statusUpdateResponse.Leases)
-            {
-                // Check if the lease is held by another process (TM)
-                if (lease.Id == _processId)
-                {
-                    //Console.WriteLine("     Adding new lease...");
-                    _leasesHeld.Add(lease);
-
-                    foreach (var tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))
-                    {
-                        tsState.Leases.RemoveAll(leasePerm => lease.Permissions.Contains(leasePerm));
-                    }
-                    continue;
-                }
-
-                // Iterate through leases held by the current process
-                foreach (var heldLease in _leasesHeld.ToList().Where(heldLease => lease.Permissions.Intersect(heldLease.Permissions).Any()))
-                {
-                    // Remove conflicting lease
-                    _leasesHeld.Remove(heldLease);
-
-                    // Exit inner loop since a conflicting lease was removed
-                    break;
-                }
-            }
+            CheckLeaseConflicts(statusUpdateResponse);
 
             /* ! Description of the algorithm and TODO list:
 
@@ -256,6 +231,38 @@ namespace TKVTransactionManager.Services
             }
 
             Monitor.Exit(this);
+        }
+
+        private void CheckLeaseConflicts(StatusUpdateResponse statusUpdateResponse)
+        {
+            // TODO: fix this bit of code! @creaai knows how! I don't!
+            foreach (var lease in statusUpdateResponse.Leases)
+            {
+                // Check if the lease is held by another process (TM)
+                if (lease.Id == _processId)
+                {
+                    //Console.WriteLine("     Adding new lease...");
+                    _leasesHeld.Add(lease);
+
+                    foreach (var tsState in _transactionsState.Where(ts => ts.Leases.Count > 0))
+                    {
+                        tsState.Leases.RemoveAll(leasePerm => lease.Permissions.Contains(leasePerm));
+                    }
+
+                    continue;
+                }
+
+                // Iterate through leases held by the current process
+                foreach (var heldLease in _leasesHeld.ToList()
+                             .Where(heldLease => lease.Permissions.Intersect(heldLease.Permissions).Any()))
+                {
+                    // Remove conflicting lease
+                    _leasesHeld.Remove(heldLease);
+
+                    // Exit inner loop since a conflicting lease was removed
+                    break;
+                }
+            }
         }
 
         public void ExecuteTransaction(TransactionState transactionState)
