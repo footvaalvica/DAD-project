@@ -324,6 +324,7 @@ namespace TKVTransactionManager.Services
             }
 
             WriteTransactions(transactionState.Request.Writes);
+            _transactionsState.Remove(transactionState);
             Monitor.PulseAll(this);
         }
 
