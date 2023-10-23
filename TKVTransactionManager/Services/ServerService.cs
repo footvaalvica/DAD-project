@@ -324,10 +324,7 @@ namespace TKVTransactionManager.Services
             }
 
             WriteTransactions(transactionState.Request.Writes);
-            // TODO: remove the leases of the transaction that we just executed from the list of leases held
-            ////_transactionsState.RemoveAll(transactionState => transactionState.Leases.Count == 0);
             Monitor.PulseAll(this);
-            
         }
 
         private void WriteTransactions(RepeatedField<DADInt> writes)
