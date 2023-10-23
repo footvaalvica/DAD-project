@@ -167,6 +167,12 @@ namespace TKVTransactionManager.Services
                     tasks.Add(t);
                 }
             }
+            else
+            {
+                // TM has all leases so it can execute the transaction
+                GossipTransaction(transactionState);
+                ExecuteTransaction(transactionState);
+            }
 
             Console.WriteLine($"Finished processing transaction request...");
             var transactionResponse = new TransactionResponse();
