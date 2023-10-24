@@ -223,7 +223,7 @@ namespace TKVTransactionManager.Services
             // check for conflicting leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
             // if the lease is in conflict, this TM should release the Lease it holds. 
 
-            /* ! Description of the algorithm and TODO list:
+            /* ! Description of the algorithm:
 
                  Look through all transactions that we want to execute and check if we have all the leases required to execute them.
                  If not, too bad! We'll store them somewhere and wait for the next slot to try again.
@@ -235,8 +235,8 @@ namespace TKVTransactionManager.Services
                  Then we are done! Just to do this for all transactions that we have stored.
              */
 
-            // TODO: Store the transactions somewhere until the next turn if we can't execute them (is this done automatically by the foreach loop below?).
-            // TODO: Before we execute and gossip we need to make sure all conditions are okay!
+            // TODO: Store the transactions somewhere until the next turn if we can't execute them. Or just abort them.
+            // TODO: Check if all conditions are okay and that we can execute.
 
             CheckLeaseConflicts(statusUpdateResponse);
 
@@ -448,7 +448,7 @@ namespace TKVTransactionManager.Services
                 Do we need two phases here? We have to think about it.
              */
 
-            // TODO: Think of possible failure cases.
+            // TODO: Think of possible failure cases. If there are none, then we don't need two phases.
 
             WriteTransactions(request.Writes);
 
@@ -502,10 +502,9 @@ namespace TKVTransactionManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
-            // TODO: we need to change this to get the biggest log that appears most often (there can be multiple logs with the same size)
+            // TODO: check correctess of this (should get the biggest log that appears most often)
+            var biggestLog = responses.GroupBy(log => log.Writes.Count).OrderByDescending(group => group.Count()).First().First();
 
-            // compare the sizes of the logs and get the biggest one
-            var biggestLog = responses.Aggregate((i1, i2) => i1.Writes.Count > i2.Writes.Count ? i1 : i2);
 
             // if the biggest one is different from ours and if they logs is not empty, we need to update our log to the latest one
             if (biggestLog.Writes.Count != _writeLog.Count && biggestLog.Writes.Count != 0)
@@ -514,19 +513,17 @@ namespace TKVTransactionManager.Services
             }
         }
 
-        // ! IMPORTANT
+        // TODO: check if this is enough to completely reset the TM
         private void UpdateLocalLog(UpdateResponse updateResponse)
         {
             Monitor.Enter(this);
             // give up all the leases that we hold
             _leasesHeld = new List<Lease>();
 
-            // TODO: completely reset the state of the TM (is this enough?)
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _dadIntsRead = new List<DADInt>();
             _transactionsState = new List<TransactionState>();
-            
-            // TODO: is this enough to recover the state of the TM?
+
             // rewrite all the transactions that in the _writeLog
             var updateResponseWriteLog = updateResponse.Writes;
             WriteTransactions(updateResponseWriteLog);
@@ -548,7 +545,8 @@ namespace TKVTransactionManager.Services
             // go to sleep
             Monitor.Enter(this);
 
-            /* TODO: get the transactionState that has the lease that is in the request
+            // TODO: isn't this done already? had a TODO here
+            /* get the transactionState that has the lease that is in the request
              When that transactionState is not in _transactionsState anymore, we remove the lease in the request from _leasesHeld
              */
             var transactionState = _transactionsState.Find(transactionState => transactionState.Permissions.Contains(request.Lease.Permissions[0]));
