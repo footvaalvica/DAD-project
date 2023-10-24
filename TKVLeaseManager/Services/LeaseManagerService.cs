@@ -487,6 +487,8 @@ namespace TKVLeaseManager.Services
             // Get values from promises
             var mostRecent = -1;
             var valueToPropose = new List<Lease>();
+
+            Monitor.Enter(this);
             foreach (var response in promiseResponses)
             {
                 if (response.ReadTimestamp > mostRecent)
@@ -495,6 +497,7 @@ namespace TKVLeaseManager.Services
                     valueToPropose = response.Leases.ToList();
                 }
             }
+            Monitor.Exit(this);
 
             // If acceptors have no value, send own value
             if (!valueToPropose.Except(new List<Lease>()).Any())

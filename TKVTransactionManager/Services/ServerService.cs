@@ -467,7 +467,11 @@ namespace TKVTransactionManager.Services
 
             // TODO: Think of possible failure cases. If there are none, then we don't need two phases.
 
+            Monitor.Enter(this);
+
             WriteTransactions(request.Writes);
+
+            Monitor.Exit(this);
 
             return new GossipResponse { Ok = true };
         }
@@ -502,6 +506,7 @@ namespace TKVTransactionManager.Services
             
             var reachableProcesses = _transactionManagers;
 
+
             foreach (var host in reachableProcesses)
             {
                 var t = Task.Run(() =>
@@ -527,8 +532,10 @@ namespace TKVTransactionManager.Services
             }
 
             // TODO: check correctess of this (should get the biggest log that appears most often)
+            // TODO: we need to lock this better! these locks don't work
+            Monitor.Enter(this);
             var biggestLog = responses.GroupBy(log => log.Writes.Count).OrderByDescending(group => group.Count()).First().First();
-
+            Monitor.Exit(this);
 
             // if the biggest one is different from ours and if they logs is not empty, we need to update our log to the latest one
             if (biggestLog.Writes.Count != _writeLog.Count && biggestLog.Writes.Count != 0)
@@ -554,6 +561,7 @@ namespace TKVTransactionManager.Services
 
             Console.WriteLine($"Updated local log to the latest one!");
             // print the log
+            // TODO: remove this print (sometimes crashes)
             foreach (var dadint in _writeLog)
             {
                 Console.WriteLine($"{dadint.Key} = {dadint.Value}");
