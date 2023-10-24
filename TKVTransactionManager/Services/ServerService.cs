@@ -217,8 +217,10 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
 
-            // they should all be the same, so we can just wait for one
-            Task.WaitAny(tasks.ToArray());
+            for (var i = 0; i < _leaseManagers.Count / 2 + 1; i++)
+            {
+                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+            }
 
             Monitor.Enter(this);
 
