@@ -460,7 +460,7 @@ namespace TKVTransactionManager.Services
                     {
                         GossipRequest gossipRequest = new();
                         gossipRequest.Writes.AddRange(dadint);
-                        var gossipResponse = _transactionManagers[host.Key].Gossip(gossipRequest); // should we send to all TM or ignore the crashed ones?
+                        var gossipResponse = _transactionManagers[host.Key].Gossip(gossipRequest);
                         responses.Add(gossipResponse);
                     }
                     catch (Grpc.Core.RpcException e)
