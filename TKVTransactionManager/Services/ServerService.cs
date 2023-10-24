@@ -274,36 +274,60 @@ namespace TKVTransactionManager.Services
                             if (statusUpdateResponse.Leases[j].Id == _processId) continue;
 
                             // if any of the permissions match and the id is different, we need to wait on that TM
+                            // BUT only if that TM is not crashed, cause otherwise it won't ever respond
                             if (permissionsRequired.Any(permRequired => statusUpdateResponse.Leases[j].Permissions.Contains(permRequired)) &&
-                                statusUpdateResponse.Leases[j].Id != _processId)
+                                statusUpdateResponse.Leases[j].Id != _processId && !_crashedHosts.Contains(statusUpdateResponse.Leases[j].Id))
                             {
                                 // TODO: is this correct? comment makes sense
                                 leasesToWaitOn.Add(statusUpdateResponse.Leases[j]); // lease instead of ToCheck cause other TM needs to know which of HIS to release
                             }
                         }
                     }
+
+                    // TODO: whats your opinion on the suspected part?
+                    // if new conflicting lease is assigned to currently crashed TM
+                    // if so, it is invalidated by lease of this TM
+                    // if it's been given to a suspected TM, leave transaction for next slot to avoid conflicts
                     
                     // ask all TM that we need to wait on to tell us when they execute the lease that we want
                     var tasks2 = new List<Task>();
-                    foreach (var leaseToWaitOn in leasesToWaitOn)
+                    try
                     {
-                        var t = Task.Run(() =>
+                        foreach (var leaseToWaitOn in leasesToWaitOn)
                         {
-                            try
+                            // if it's been given to a suspected TM, leave transaction for next slot to avoid conflicts
+                            if (_tmsSuspectedPerSlot[_currentSlot].Contains(leaseToWaitOn.Id))
                             {
-                                var sameSlotLeaseExecutionRequest = new SameSlotLeaseExecutionRequest { Lease = leaseToWaitOn };
-                                _transactionManagers[leaseToWaitOn.Id].SameSlotLeaseExecution(sameSlotLeaseExecutionRequest);
-                            }
-                            catch (Grpc.Core.RpcException e)
+                                throw new SuspectedProcessWaitException();
+                            };
+
+                            var t = Task.Run(() =>
                             {
-                                Console.WriteLine(e.Status);
-                            }
-                            return Task.CompletedTask;
-                        });
-                        tasks2.Add(t);
+                                try
+                                {
+                                    var sameSlotLeaseExecutionRequest = new SameSlotLeaseExecutionRequest { Lease = leaseToWaitOn };
+                                    _transactionManagers[leaseToWaitOn.Id].SameSlotLeaseExecution(sameSlotLeaseExecutionRequest);
+                                }
+                                catch (Grpc.Core.RpcException e)
+                                {
+                                    Console.WriteLine(e.Status);
+                                }
+                                return Task.CompletedTask;
+                            });
+                            tasks2.Add(t);
+                        }
+                    }
+                    catch (SuspectedProcessWaitException e)
+                    {
+                        Console.WriteLine(e.Message);
+                        continue;
                     }
 
                     // TODO: possible deadlock point! if this fails, do we abort? do we try again? do we wait for the next slot?
+                    // I think its okay now, crashed tms are ignored and suspected ones are put on hold
+                    // so (i think) now all TMs to be contacted should respond in a timely manner
+                    // although, if a TM is suspected for a long time, it might be a problem
+                    // for that i propose that we abort the transaction or use URB/whatever to try to contact the suspected TM via other TMs 
                     Task.WaitAll(tasks2.ToArray());
 
                     try

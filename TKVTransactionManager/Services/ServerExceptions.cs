@@ -15,4 +15,11 @@ namespace TKVTransactionManager.Services
         public MajorityInsufficiencyException(string message) : base(message) { }
         public MajorityInsufficiencyException(string message, Exception innerException) : base(message, innerException) { }
     }
+
+    public class SuspectedProcessWaitException : Exception
+    {
+        public SuspectedProcessWaitException() : base("Conflicting process is suspected to be crashed.") { }
+        public SuspectedProcessWaitException(string message) : base(message) { }
+        public SuspectedProcessWaitException(string message, Exception innerException) : base(message, innerException) { }
+    }
 }
