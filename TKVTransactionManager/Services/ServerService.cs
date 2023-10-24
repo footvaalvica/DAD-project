@@ -73,7 +73,7 @@ namespace TKVTransactionManager.Services
             _currentSlot = 0;
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _leasesHeld = new List<Lease>();
-
+                
             _allLeases = false;
             _dadIntsRead = new List<DADInt>();
             _transactionsState = new List<TransactionState>();
@@ -405,7 +405,7 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<GossipResponse>();
 
-            var reachableProcesses = _transactionManagers.Where(host => !_crashedHosts.Contains(host.Key) &&
+            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
              !_tmsSuspectedPerSlot[_currentSlot][_processIndex].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
             if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
@@ -470,7 +470,7 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            var reachableProcesses = _transactionManagers.Where(host => !_crashedHosts.Contains(host.Key) &&
+            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
              !_tmsSuspectedPerSlot[_currentSlot][_processIndex].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
             if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
