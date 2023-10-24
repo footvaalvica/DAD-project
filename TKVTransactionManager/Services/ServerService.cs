@@ -405,8 +405,9 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<GossipResponse>();
 
+            // filter processes that are not crashed and that we don't suspect to be crashed
             var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
-             !_tmsSuspectedPerSlot[_currentSlot][_processIndex].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
             if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
             {
@@ -470,8 +471,9 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
+            // filter processes that are not crashed and that we don't suspect to be crashed
             var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
-             !_tmsSuspectedPerSlot[_currentSlot][_processIndex].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
             if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
             {
