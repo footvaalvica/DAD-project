@@ -414,12 +414,12 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<GossipResponse>();
 
-            // TODO: get this working again Martim
+            // TODO: get this working again (TM doesnt count itself as part of the majority)
 
             ////// filter processes that are not crashed and that we don't suspect to be crashed
             ////var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
             //// !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
-            
+
             ////Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
 
             ////if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
@@ -490,7 +490,7 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            // TODO: get this working again Martim
+            // TODO: get this working again (TM doesnt count itself as part of the majority)
 
             ////// filter processes that are not crashed and that we don't suspect to be crashed
             ////var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
