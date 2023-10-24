@@ -47,7 +47,7 @@ namespace TKVTransactionManager.Services
 
         private List<DADInt> _writeLog;
 
-        private List<string> _processBook = new();
+        private List<string> _processBook;
 
         private List<string> _crashedHosts = new();
 
@@ -67,6 +67,7 @@ namespace TKVTransactionManager.Services
             _tmsStatePerSlot = tmsStatePerSlot;
             _tmsSuspectedPerSlot = tmsSuspectedPerSlot;
             _processIndex = processIndex;
+            _processBook = processBook;
 
             _isCrashed = false;
             _currentSlot = 0;
@@ -469,7 +470,6 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            // wtf is this
             var reachableProcesses = _transactionManagers.Where(host => !_crashedHosts.Contains(host.Key) &&
              !_tmsSuspectedPerSlot[_currentSlot][_processIndex].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
