@@ -442,8 +442,9 @@ namespace TKVTransactionManager.Services
 
             // Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
 
-            // Not doing f / 2 + 1 because always reachable to self
-            if (reachableProcesses.Count < _transactionManagers.Count / 2)
+            // always reachable to self
+            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 : _transactionManagers.Count() / 2 + 1;
+            if (reachableProcesses.Count < tmMajority)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
                 throw new MajorityInsufficiencyException();
@@ -471,7 +472,7 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
 
-            for (var i = 0; i < _transactionManagers.Count / 2; i++)
+            for (var i = 0; i < tmMajority; i++)
             {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
@@ -515,8 +516,9 @@ namespace TKVTransactionManager.Services
 
             Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
 
-            // Not doing f / 2 + 1 because always reachable to self
-            if (reachableProcesses.Count < _transactionManagers.Count / 2)
+            // always reachable to self
+            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 : _transactionManagers.Count() / 2 + 1;
+            if (reachableProcesses.Count < tmMajority)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
                 throw new MajorityInsufficiencyException();
@@ -540,8 +542,7 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
             
-            // wait for a majority-1 of them to reply
-            for (var i = 0; i < _transactionManagers.Count / 2; i++)
+            for (var i = 0; i < tmMajority; i++)
             {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
