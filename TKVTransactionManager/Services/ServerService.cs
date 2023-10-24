@@ -399,8 +399,6 @@ namespace TKVTransactionManager.Services
 
             WriteTransactions(transactionState.Request.Writes);
             Monitor.PulseAll(this);
-
-
         }
 
         private void WriteTransactions(RepeatedField<DADInt> writes)
@@ -438,21 +436,18 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<GossipResponse>();
 
-            // TODO: get this working again (TM doesnt count itself as part of the majority)
+            // filter processes that are not crashed and that we don't suspect to be crashed
+            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
+             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
-            ////// filter processes that are not crashed and that we don't suspect to be crashed
-            ////var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
-            //// !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+            // Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
 
-            ////Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
-
-            ////if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
-            ////{
-            ////    Console.WriteLine("Not enough processes to reach a majority, aborting update...");
-            ////    throw new MajorityInsufficiencyException();
-            ////}
-
-            var reachableProcesses = _transactionManagers;
+            // Not doing f / 2 + 1 because always reachable to self
+            if (reachableProcesses.Count < _transactionManagers.Count / 2)
+            {
+                Console.WriteLine("Not enough processes to reach a majority, aborting update...");
+                throw new MajorityInsufficiencyException();
+            }
 
             // via this special pipeline, we only send the write set of the transaction
             var dadint = transaction.Request.Writes;
@@ -476,7 +471,7 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
 
-            for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
+            for (var i = 0; i < _transactionManagers.Count / 2; i++)
             {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
@@ -514,22 +509,18 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            // TODO: get this working again (TM doesnt count itself as part of the majority)
+            // filter processes that are not crashed and that we don't suspect to be crashed
+            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
+             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
-            ////// filter processes that are not crashed and that we don't suspect to be crashed
-            ////var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
-            //// !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+            Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
 
-            ////Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
-
-            ////if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
-            ////{
-            ////    Console.WriteLine("Not enough processes to reach a majority, aborting update...");
-            ////    throw new MajorityInsufficiencyException();
-            ////}
-            
-            var reachableProcesses = _transactionManagers;
-
+            // Not doing f / 2 + 1 because always reachable to self
+            if (reachableProcesses.Count < _transactionManagers.Count / 2)
+            {
+                Console.WriteLine("Not enough processes to reach a majority, aborting update...");
+                throw new MajorityInsufficiencyException();
+            }
 
             foreach (var host in reachableProcesses)
             {
@@ -549,8 +540,8 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
             
-            // wait for a majority of them to reply
-            for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
+            // wait for a majority-1 of them to reply
+            for (var i = 0; i < _transactionManagers.Count / 2; i++)
             {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
