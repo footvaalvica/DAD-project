@@ -195,6 +195,7 @@ namespace TKVTransactionManager.Services
                 try
                 {
                     TwoPhaseCommit(transactionState);
+                    _transactionsState.Remove(transactionState);
                 }
                 catch (Exception e)
                 {
@@ -204,7 +205,6 @@ namespace TKVTransactionManager.Services
                 }
             }
 
-            _transactionsState.Remove(transactionState);
             Console.WriteLine($"Finished processing transaction request...");
             TransactionResponse transactionResponse = new TransactionResponse();
             transactionResponse.Response.AddRange(_dadIntsRead);
@@ -474,18 +474,20 @@ namespace TKVTransactionManager.Services
             }
 
             // wait for a majority of them to reply
-            for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
+            for (var i = 0; i < tmMajority; i++)
             {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
+            // todo: this wont ever happen as we wait for majority above
             // if not a majority of them replied with ok, we can't execute the transaction
-            if (prepareResponses.Count < _transactionManagers.Count / 2 + 1)
+            if (prepareResponses.Count < tmMajority)
             {
                 Console.WriteLine($"Not enough Prepare responses received. Aborting transaction.");
                 return;
             }
 
+            tasks.Clear();
             // send commit to all TMs
             foreach (var host in reachableProcesses)
             {
@@ -505,6 +507,13 @@ namespace TKVTransactionManager.Services
                 });
                 tasks.Add(t);
             }
+
+            // wait for a majority of them to reply
+            for (var i = 0; i < tmMajority; i++)
+            {
+                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+            }
+
             // if we get here we execute the transaction
             ExecuteTransaction(transactionState);
         }
