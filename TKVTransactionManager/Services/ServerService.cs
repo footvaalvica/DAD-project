@@ -161,7 +161,7 @@ namespace TKVTransactionManager.Services
                 .Where(lease => !_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(lease)))
                 .ToList();
             _transactionsState.Add(transactionState);
-
+            
             // if TM doesn't have all leases, it must request them
             if (transactionState.Permissions.Count > 0)
             {
@@ -190,8 +190,23 @@ namespace TKVTransactionManager.Services
                 }
             }
 
+            else
+            {
+                try
+                {
+                    TwoPhaseCommit(transactionState);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    // abort transaction
+                    _dadIntsRead.Add(new DADInt { Key = "abort", Value = null });
+                }
+            }
+
+            _transactionsState.Remove(transactionState);
             Console.WriteLine($"Finished processing transaction request...");
-            var transactionResponse = new TransactionResponse();
+            TransactionResponse transactionResponse = new TransactionResponse();
             transactionResponse.Response.AddRange(_dadIntsRead);
 
             Monitor.Exit(this);
@@ -333,8 +348,7 @@ namespace TKVTransactionManager.Services
                     try
                     {
                         // Either we spread and execute, or we don't at all
-                        GossipTransaction(transactionState);
-                        ExecuteTransaction(transactionState);
+                        TwoPhaseCommit(transactionState);
                         transactionStatesToRemove.Add(transactionState);
                     } 
                     catch (MajorityInsufficiencyException e)
@@ -425,24 +439,15 @@ namespace TKVTransactionManager.Services
             }
         }
 
-        public void GossipTransaction(TransactionState transaction)
+        public void TwoPhaseCommit(TransactionState transactionState)
         {
-            /* This is just a matter of sending the write part of a transaction to all other TMs.
-                 Once they have replied saying that a majority of them executed the transaction, we can execute it.
-                 Do we need two phases here? We have to think about it.
-              */
+            Console.WriteLine("$Sending Prepare to all tms...");
+            List<Task> tasks = new List<Task>();
+            var prepareResponses = new List<PrepareResponse>();
 
-            Console.WriteLine($"    Gossiping transaction...");
-            var tasks = new List<Task>();
-            var responses = new List<GossipResponse>();
-
-            // filter processes that are not crashed and that we don't suspect to be crashed
             var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
              !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
-
-            // Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
-
-            // always reachable to self
+            
             int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 : _transactionManagers.Count() / 2 + 1;
             if (reachableProcesses.Count < tmMajority)
             {
@@ -450,18 +455,14 @@ namespace TKVTransactionManager.Services
                 throw new MajorityInsufficiencyException();
             }
 
-            // via this special pipeline, we only send the write set of the transaction
-            var dadint = transaction.Request.Writes;
             foreach (var host in reachableProcesses)
             {
                 var t = Task.Run(() =>
                 {
                     try
                     {
-                        GossipRequest gossipRequest = new();
-                        gossipRequest.Writes.AddRange(dadint);
-                        var gossipResponse = _transactionManagers[host.Key].Gossip(gossipRequest);
-                        responses.Add(gossipResponse);
+                        PrepareResponse prepareResponse = _transactionManagers[host.Key].Prepare(new PrepareRequest());
+                        prepareResponses.Add(prepareResponse);
                     }
                     catch (Grpc.Core.RpcException e)
                     {
@@ -472,29 +473,55 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
 
-            for (var i = 0; i < tmMajority; i++)
+            // wait for a majority of them to reply
+            for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
             {
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
-            Console.WriteLine($"Gossiping transaction... Done!");
+
+            // if not a majority of them replied with ok, we can't execute the transaction
+            if (prepareResponses.Count < _transactionManagers.Count / 2 + 1)
+            {
+                Console.WriteLine($"Not enough Prepare responses received. Aborting transaction.");
+                return;
+            }
+
+            // send commit to all TMs
+            foreach (var host in reachableProcesses)
+            {
+                var t = Task.Run(() =>
+                {
+                    try
+                    {
+                        CommitRequest commitRequest = new();
+                        commitRequest.Writes.AddRange(transactionState.Request.Writes);
+                        CommitResponse commitResponse = _transactionManagers[host.Key].Commit(commitRequest);
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+                    return Task.CompletedTask;
+                });
+                tasks.Add(t);
+            }
+            // if we get here we execute the transaction
+            ExecuteTransaction(transactionState);
         }
 
-        public GossipResponse ReceiveGossip(GossipRequest request)
+        public PrepareResponse ReplyWithPrepare()
         {
-            /* When a gossip request is received we first reply to the TM saying that we have received it and that we will execute it.
-                Do we need two phases here? We have to think about it.
-             */
-
-            // TODO: Think of possible failure cases. If there are none, then we don't need two phases.
-
-            Monitor.Enter(this);
-
-            WriteTransactions(request.Writes);
-
-            Monitor.Exit(this);
-
-            return new GossipResponse { Ok = true };
+            // if we get prepare request, we reply with ok
+            return new PrepareResponse { };
         }
+
+        public CommitResponse CommitRequestReceived(CommitRequest commitRequest)
+        {
+            // if we get commit request, we execute the transactions received
+            WriteTransactions(commitRequest.Writes);
+            return new CommitResponse { Ok = true };
+        }
+
 
         public void UpdateTransactionLogStatus()
         {

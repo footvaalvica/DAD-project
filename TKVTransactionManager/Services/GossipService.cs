@@ -12,9 +12,14 @@ namespace TKVTransactionManager.Services
             this.serverService = serverService;
         }
 
-        public override Task<GossipResponse> Gossip(GossipRequest request, ServerCallContext context)
+        public override Task<PrepareResponse> Prepare(PrepareRequest request, ServerCallContext context)
         {
-            return Task.FromResult(serverService.ReceiveGossip(request));
+            return Task.FromResult(serverService.ReplyWithPrepare());
+        }
+
+        public override Task<CommitResponse> Commit(CommitRequest request, ServerCallContext context)
+        {
+            return Task.FromResult(serverService.CommitRequestReceived(request));
         }
 
         public override Task<UpdateResponse> Update(UpdateRequest request, ServerCallContext context)

@@ -7,16 +7,23 @@ import "LeaseType.proto";
 // TODO: maybe these things should have slot data? to check if they are the same?
 
 service Gossip {
-	rpc Gossip (GossipRequest) returns (GossipResponse) {}
+	rpc Prepare (PrepareRequest) returns (PrepareResponse) {}
+	rpc Commit (CommitRequest) returns (CommitResponse) {}
 	rpc Update (UpdateRequest) returns (UpdateResponse) {}
 	rpc SameSlotLeaseExecution (SameSlotLeaseExecutionRequest) returns (SameSlotLeaseExecutionResponse) {}
 }
 
-message GossipRequest {
+message PrepareRequest {
+}
+
+message PrepareResponse {
+}
+
+message CommitRequest {
 	repeated DADInt writes = 1;
 }
 
-message GossipResponse {
+message CommitResponse {
 	bool ok = 1;
 }
 
