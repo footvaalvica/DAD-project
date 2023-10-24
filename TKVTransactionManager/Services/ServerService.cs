@@ -47,7 +47,7 @@ namespace TKVTransactionManager.Services
 
         private List<DADInt> _writeLog;
 
-        private List<string> _processBook;
+        private List<string> _processBook = new();
 
         private List<string> _crashedHosts = new();
 
@@ -404,7 +404,7 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<GossipResponse>();
 
-            Dictionary<string, Gossip.GossipClient> reachableProcesses = _transactionManagers.Where(host => !_crashedHosts.Contains(host.Key) &&
+            var reachableProcesses = _transactionManagers.Where(host => !_crashedHosts.Contains(host.Key) &&
              !_tmsSuspectedPerSlot[_currentSlot][_processIndex].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
             if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
@@ -469,7 +469,8 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            Dictionary<string, Gossip.GossipClient> reachableProcesses = _transactionManagers.Where(host => !_crashedHosts.Contains(host.Key) &&
+            // wtf is this
+            var reachableProcesses = _transactionManagers.Where(host => !_crashedHosts.Contains(host.Key) &&
              !_tmsSuspectedPerSlot[_currentSlot][_processIndex].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
             if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
