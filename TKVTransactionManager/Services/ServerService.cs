@@ -145,6 +145,8 @@ namespace TKVTransactionManager.Services
         {
             if (_isCrashed) { Monitor.Wait(this); }
 
+            Monitor.Enter(this);
+
             _dadIntsRead = new List<DADInt>();
 
             var transactionState = new TransactionState { Permissions = new List<string>(), Request = transactionRequest };
@@ -159,7 +161,6 @@ namespace TKVTransactionManager.Services
                 .Where(lease => !_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(lease)))
                 .ToList();
             _transactionsState.Add(transactionState);
-
 
             // if TM doesn't have all leases, it must request them
             if (transactionState.Permissions.Count > 0)
@@ -192,6 +193,9 @@ namespace TKVTransactionManager.Services
             Console.WriteLine($"Finished processing transaction request...");
             var transactionResponse = new TransactionResponse();
             transactionResponse.Response.AddRange(_dadIntsRead);
+
+            Monitor.Exit(this);
+
             return transactionResponse;
         }
 
@@ -241,6 +245,7 @@ namespace TKVTransactionManager.Services
 
             CheckLeaseConflicts(statusUpdateResponse);
 
+            var transactionStatesToRemove = new List<TransactionState>();
             // foreach transaction state, check if we have all the leases required to execute it
             foreach (var transactionState in _transactionsState)
             {
@@ -306,6 +311,7 @@ namespace TKVTransactionManager.Services
                         // Either we spread and execute, or we don't at all
                         GossipTransaction(transactionState);
                         ExecuteTransaction(transactionState);
+                        transactionStatesToRemove.Add(transactionState);
                     } 
                     catch (MajorityInsufficiencyException e)
                     {
@@ -313,6 +319,9 @@ namespace TKVTransactionManager.Services
                     }
                 }
             }
+
+            // we need to remove them outside of the loop, otherwise we get an error
+            transactionStatesToRemove.ForEach(transactionState => _transactionsState.Remove(transactionState));
 
             Monitor.Exit(this);
         }
@@ -365,9 +374,9 @@ namespace TKVTransactionManager.Services
             }
 
             WriteTransactions(transactionState.Request.Writes);
-            _transactionsState.Remove(transactionState);
-
             Monitor.PulseAll(this);
+
+
         }
 
         private void WriteTransactions(RepeatedField<DADInt> writes)
@@ -405,15 +414,21 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<GossipResponse>();
 
-            // filter processes that are not crashed and that we don't suspect to be crashed
-            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
-             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+            // TODO: get this working again Martim
 
-            if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
-            {
-                Console.WriteLine("Not enough processes to reach a majority, aborting update...");
-                throw new MajorityInsufficiencyException();
-            }
+            ////// filter processes that are not crashed and that we don't suspect to be crashed
+            ////var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
+            //// !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+            
+            ////Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
+
+            ////if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
+            ////{
+            ////    Console.WriteLine("Not enough processes to reach a majority, aborting update...");
+            ////    throw new MajorityInsufficiencyException();
+            ////}
+
+            var reachableProcesses = _transactionManagers;
 
             // via this special pipeline, we only send the write set of the transaction
             var dadint = transaction.Request.Writes;
@@ -471,15 +486,21 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            // filter processes that are not crashed and that we don't suspect to be crashed
-            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
-             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+            // TODO: get this working again Martim
 
-            if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
-            {
-                Console.WriteLine("Not enough processes to reach a majority, aborting update...");
-                throw new MajorityInsufficiencyException();
-            }
+            ////// filter processes that are not crashed and that we don't suspect to be crashed
+            ////var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
+            //// !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+
+            ////Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
+
+            ////if (reachableProcesses.Count < _transactionManagers.Count / 2 + 1)
+            ////{
+            ////    Console.WriteLine("Not enough processes to reach a majority, aborting update...");
+            ////    throw new MajorityInsufficiencyException();
+            ////}
+            
+            var reachableProcesses = _transactionManagers;
 
             foreach (var host in reachableProcesses)
             {
@@ -530,6 +551,14 @@ namespace TKVTransactionManager.Services
             // rewrite all the transactions that in the _writeLog
             var updateResponseWriteLog = updateResponse.Writes;
             WriteTransactions(updateResponseWriteLog);
+
+            Console.WriteLine($"Updated local log to the latest one!");
+            // print the log
+            foreach (var dadint in _writeLog)
+            {
+                Console.WriteLine($"{dadint.Key} = {dadint.Value}");
+            }
+
             Monitor.Exit(this);
         }
 
