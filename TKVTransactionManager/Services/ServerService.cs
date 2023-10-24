@@ -14,7 +14,6 @@ namespace TKVTransactionManager.Services
     {
         public List<string> Permissions { get; set; }
         public TransactionRequest Request { get; set; }
-
         public int Index { get; set; }
     }
 
@@ -188,13 +187,6 @@ namespace TKVTransactionManager.Services
                     tasks.Add(t);
                 }
             }
-            // TODO: why is this here? it's also down below
-            ////else
-            ////{
-            ////    // TM has all leases so it can execute the transaction
-            ////    GossipTransaction(transactionState);
-            ////    ExecuteTransaction(transactionState);
-            ////}
 
             Console.WriteLine($"Finished processing transaction request...");
             var transactionResponse = new TransactionResponse();
@@ -262,10 +254,11 @@ namespace TKVTransactionManager.Services
 
                     var leasesToWaitOn = new List<Lease>();
 
-                    // TODO: check this isn't stupid
+                    // check this isn't stupid
+                    //  i like this, makes sense to me! footvaalvica 👍
                     for (var i = 0; i < statusUpdateResponse.Leases.Count; i++)
                     {
-                        // if lease aint for this tm or not related to this transaction, continue
+                        // if lease ain't for this tm or not related to this transaction, continue
                         if (statusUpdateResponse.Leases[i].Id != _processId || 
                             statusUpdateResponse.Leases[i].Permissions.Where(perm => permissionsRequired.Contains(perm)).ToList().Count == 0)
                             continue;
@@ -278,6 +271,7 @@ namespace TKVTransactionManager.Services
                             if (permissionsRequired.Any(permRequired => statusUpdateResponse.Leases[j].Permissions.Contains(permRequired)) &&
                                 statusUpdateResponse.Leases[j].Id != _processId)
                             {
+                                // TODO: is this correct? comment makes sense
                                 leasesToWaitOn.Add(statusUpdateResponse.Leases[j]); // lease instead of ToCheck cause other TM needs to know which of HIS to release
                             }
                         }
@@ -303,7 +297,7 @@ namespace TKVTransactionManager.Services
                         tasks2.Add(t);
                     }
 
-                    // wait for all of them to reply
+                    // TODO: possible deadlock point! if this fails, do we abort? do we try again? do we wait for the next slot?
                     Task.WaitAll(tasks2.ToArray());
 
                     try
@@ -371,8 +365,6 @@ namespace TKVTransactionManager.Services
 
             WriteTransactions(transactionState.Request.Writes);
             _transactionsState.Remove(transactionState);
-
-            // TODO: somehow remove the leases in conflict in the same slot
 
             Monitor.PulseAll(this);
         }
@@ -522,8 +514,10 @@ namespace TKVTransactionManager.Services
             }
         }
 
+        // ! IMPORTANT
         private void UpdateLocalLog(UpdateResponse updateResponse)
         {
+            Monitor.Enter(this);
             // give up all the leases that we hold
             _leasesHeld = new List<Lease>();
 
@@ -536,6 +530,7 @@ namespace TKVTransactionManager.Services
             // rewrite all the transactions that in the _writeLog
             var updateResponseWriteLog = updateResponse.Writes;
             WriteTransactions(updateResponseWriteLog);
+            Monitor.Exit(this);
         }
 
         public UpdateResponse ReplyWithUpdate(UpdateRequest request)
