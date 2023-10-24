@@ -538,6 +538,8 @@ namespace TKVTransactionManager.Services
             Monitor.Exit(this);
 
             // if the biggest one is different from ours and if they logs is not empty, we need to update our log to the latest one
+
+            // TODO: we don't care about the sequence, so we only compare elements that are in both lists
             if (biggestLog.Writes.Count != _writeLog.Count && biggestLog.Writes.Count != 0)
             {
                 UpdateLocalLog(biggestLog);
