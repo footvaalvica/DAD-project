@@ -65,8 +65,6 @@ namespace TKVTransactionManager.Services
 
         private List<string> _processBook;
 
-        private List<string> _crashedHosts = new();
-
         private CancellationTokenSource _cancelPreviousActiveTasks;
 
         public ServerService(
@@ -131,13 +129,6 @@ namespace TKVTransactionManager.Services
                 //Console.WriteLine("Ending preparation -----------------------");
                 Monitor.Exit(this);
                 return;
-            }
-
-            _crashedHosts.Clear();
-            for (int i = 0; i < _processBook.Count; i++)
-            {
-                if (_tmsStatePerSlot[_currentSlot][i])
-                    _crashedHosts.Add(_processBook[i]);
             }
 
             Monitor.PulseAll(this);
@@ -330,7 +321,7 @@ namespace TKVTransactionManager.Services
                             // if any of the permissions match and the id is different, we need to wait on that TM
                             // BUT only if that TM is not crashed, cause otherwise it won't ever respond
                             if (permissionsRequired.Any(permRequired => statusUpdateResponse.Leases[j].Permissions.Contains(permRequired)) &&
-                                statusUpdateResponse.Leases[j].Id != _processId && !_crashedHosts.Contains(statusUpdateResponse.Leases[j].Id))
+                                statusUpdateResponse.Leases[j].Id != _processId)
                             {
                                 leasesToWaitOn.Add(statusUpdateResponse.Leases[j]); // lease instead of ToCheck cause other TM needs to know which of HIS to release
                             }
@@ -486,10 +477,10 @@ namespace TKVTransactionManager.Services
             List<Task> tasks = new List<Task>();
             var prepareResponses = new List<PrepareResponse>();
 
-            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
+            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId &&
              !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
             
-            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 +1: _transactionManagers.Count() / 2;
+            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count / 2 +1: _transactionManagers.Count / 2;
             if (reachableProcesses.Count < tmMajority)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
@@ -598,13 +589,13 @@ namespace TKVTransactionManager.Services
             var responses = new List<UpdateResponse>();
 
             // filter processes that are not crashed and that we don't suspect to be crashed
-            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
+            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId &&
              !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 
             Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
 
             // always reachable to self
-            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 + 1: _transactionManagers.Count() / 2;
+            int tmMajority = (_transactionManagers.Count % 2 == 0) ? _transactionManagers.Count / 2 + 1: _transactionManagers.Count / 2;
             if (reachableProcesses.Count < tmMajority)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
