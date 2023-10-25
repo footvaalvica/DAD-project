@@ -5,11 +5,24 @@ using Google.Protobuf.WellKnownTypes;
 using System.Transactions;
 using Google.Protobuf.Collections;
 using System.Diagnostics;
+using ExtensionMethods;
+
+namespace ExtensionMethods
+{
+    public static class ListExtensions
+    {
+        public static T MostCommon<T>(this IEnumerable<T> list)
+        {
+            return list.GroupBy(i=>i).OrderByDescending(grp=>grp.Count()).Select(grp=>grp.Key).First();
+        }
+    }
+}
 
 namespace TKVTransactionManager.Services
 {
     using LeaseManagers =
         Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient>;
+
 
     public struct TransactionState
     {
@@ -17,6 +30,7 @@ namespace TKVTransactionManager.Services
         public TransactionRequest Request { get; set; }
         public int Index { get; set; }
     }
+    
 
     public class ServerService
     {
@@ -294,13 +308,11 @@ namespace TKVTransactionManager.Services
                             if (permissionsRequired.Any(permRequired => statusUpdateResponse.Leases[j].Permissions.Contains(permRequired)) &&
                                 statusUpdateResponse.Leases[j].Id != _processId && !_crashedHosts.Contains(statusUpdateResponse.Leases[j].Id))
                             {
-                                // TODO: is this correct? comment makes sense
                                 leasesToWaitOn.Add(statusUpdateResponse.Leases[j]); // lease instead of ToCheck cause other TM needs to know which of HIS to release
                             }
                         }
                     }
 
-                    // TODO: whats your opinion on the suspected part?
                     // if new conflicting lease is assigned to currently crashed TM
                     // if so, it is invalidated by lease of this TM
                     // if it's been given to a suspected TM, leave transaction for next slot to avoid conflicts
@@ -339,7 +351,6 @@ namespace TKVTransactionManager.Services
                         continue;
                     }
 
-                    // TODO: possible deadlock point! if this fails, do we abort? do we try again? do we wait for the next slot?
                     // I think its okay now, crashed tms are ignored and suspected ones are put on hold
                     // so (i think) now all TMs to be contacted should respond in a timely manner
                     // although, if a TM is suspected for a long time, it might be a problem
@@ -590,38 +601,42 @@ namespace TKVTransactionManager.Services
                 tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
             }
 
-            // TODO: check correctess of this (should get the biggest log that appears most often)
-            // TODO: we need to lock this better! these locks don't work
+            // TODO: doesn't work, but once we get a majority, we ignore the rest of the responses
+            ////foreach (var task in tasks)
+            ////{
+            ////    task.Dispose();
+            ////}
+
             Monitor.Enter(this);
-            var biggestLog = responses.GroupBy(log => log.Writes.Count).OrderByDescending(group => group.Count()).First().First();
+            // group responses by size and get the biggest group
+            var biggestLog = responses.GroupBy(response => response.Writes.Count).OrderByDescending(group => group.Count()).First().ToList().MostCommon();
             Monitor.Exit(this);
 
             // if the biggest one is different from ours and if they logs is not empty, we need to update our log to the latest one
+            var sortedBiggestLog = biggestLog.Writes.OrderBy(dadint => dadint.Key).ToList();
+            var sortedWriteLog = _writeLog.OrderBy(dadint => dadint.Key).ToList();
 
-            // TODO: we don't care about the sequence, so we only compare elements that are in both lists
-            if (biggestLog.Writes.Count != _writeLog.Count && biggestLog.Writes.Count != 0)
+            if (!sortedBiggestLog.SequenceEqual(sortedWriteLog) && biggestLog.Writes.Count != 0)
             {
                 UpdateLocalLog(biggestLog);
             }
         }
 
-        // TODO: check if this is enough to completely reset the TM
         private void UpdateLocalLog(UpdateResponse updateResponse)
         {
             Monitor.Enter(this);
-            // give up all the leases that we hold
+
+            // TODO: not give up all leases
             _leasesHeld = new List<Lease>();
 
+            // TODO: does this completely reset the TM
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _dadIntsRead = new List<DADInt>();
             _transactionsState = new List<TransactionState>();
-
-            // rewrite all the transactions that in the _writeLog
-            var updateResponseWriteLog = updateResponse.Writes;
-            WriteTransactions(updateResponseWriteLog);
+            _writeLog = new List<DADInt>();
+            WriteTransactions(updateResponse.Writes);
 
             Console.WriteLine($"Updated local log to the latest one!");
-            // print the log
             // TODO: remove this print (sometimes crashes)
             foreach (var dadint in _writeLog)
             {
@@ -642,11 +657,9 @@ namespace TKVTransactionManager.Services
         // this method is for when a TM asks us to tell them when we execute a transaction that they have a lease for.
         public SameSlotLeaseExecutionResponse SameSlotLeaseExecution(SameSlotLeaseExecutionRequest request)
         {
-            // TODO: not sure if locks are needed here
             // go to sleep
             Monitor.Enter(this);
 
-            // TODO: isn't this done already? had a TODO here
             /* get the transactionState that has the lease that is in the request
              When that transactionState is not in _transactionsState anymore, we remove the lease in the request from _leasesHeld
              */
@@ -660,11 +673,6 @@ namespace TKVTransactionManager.Services
             // remove the lease in the request from _leasesHeld (a single lease)
             _leasesHeld.RemoveAll(leaseHeld => leaseHeld.Permissions.Contains(request.Lease.Permissions[0]));
 
-            ////// wait for the lease that is in the request to not be in the list of leases held
-            ////while (_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(request.Lease.Permissions[0])))
-            ////{
-            ////    // thread will be woken up by the monitorpulseall in the execute transaction method
-            ////}
             Monitor.Exit(this);
             return new SameSlotLeaseExecutionResponse { Lease = request.Lease };
         }
