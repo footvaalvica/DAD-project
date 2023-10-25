@@ -22,4 +22,11 @@ namespace TKVTransactionManager.Services
         public SuspectedProcessWaitException(string message) : base(message) { }
         public SuspectedProcessWaitException(string message, Exception innerException) : base(message, innerException) { }
     }
+
+    public class SlotExecutionTimeoutException : Exception
+    {
+        public SlotExecutionTimeoutException() : base("A new slot has begun so execution of current slot must end.") { }
+        public SlotExecutionTimeoutException(string message) : base(message) { }
+        public SlotExecutionTimeoutException(string message, Exception innerException) : base(message, innerException) { }
+    }
 }

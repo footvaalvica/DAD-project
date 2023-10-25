@@ -6,6 +6,7 @@ using System.Transactions;
 using Google.Protobuf.Collections;
 using System.Diagnostics;
 using ExtensionMethods;
+using System.Threading;
 
 namespace ExtensionMethods
 {
@@ -66,6 +67,8 @@ namespace TKVTransactionManager.Services
 
         private List<string> _crashedHosts = new();
 
+        private CancellationTokenSource _cancelPreviousActiveTasks;
+
         public ServerService(
             string processId,
             Dictionary<string, Gossip.GossipClient> transactionManagers,
@@ -85,7 +88,7 @@ namespace TKVTransactionManager.Services
             _processBook = processBook;
 
             _isCrashed = false;
-            _currentSlot = 0;
+            _currentSlot = -1; // begin at -1 so that the first slot is 0 :)
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _leasesHeld = new List<Lease>();
                 
@@ -93,11 +96,20 @@ namespace TKVTransactionManager.Services
             _dadIntsRead = new List<DADInt>();
             _transactionsState = new List<TransactionState>();
             _writeLog = new List<DADInt>();
+
+            _cancelPreviousActiveTasks = new CancellationTokenSource();
         }
 
         public void PrepareSlot()
         {
             Monitor.Enter(this);
+
+            // Global slot counter
+            _currentSlot++;
+
+            // End previous slot if it's still waiting on tasks
+            _cancelPreviousActiveTasks.Cancel();
+            _cancelPreviousActiveTasks = new CancellationTokenSource();
 
             // End of slots
             if (_currentSlot >= _tmsStatePerSlot.Count)
@@ -134,18 +146,22 @@ namespace TKVTransactionManager.Services
             {
                 Console.WriteLine("Updating Transaction Log");
                 UpdateTransactionLogStatus();
-            } catch (MajorityInsufficiencyException e)
+
+                Console.WriteLine("Requesting a Paxos Update");
+                AskForLeaseManagersStatus();
+            }
+            catch (MajorityInsufficiencyException e)
             {
                 Console.WriteLine(e.Message);
                 Monitor.Exit(this);
                 return;
             }
-
-            Console.WriteLine("Requesting a Paxos Update");
-            AskForLeaseManagersStatus();
-
-            // Global slot counter
-            _currentSlot++;
+            catch (SlotExecutionTimeoutException e)
+            {
+                Console.WriteLine(e.Message);
+                Monitor.Exit(this);
+                return;
+            }
 
             Monitor.Exit(this);
         }
@@ -240,13 +256,21 @@ namespace TKVTransactionManager.Services
                 {
                     statusUpdateResponse = _leaseManagers[host.Key].StatusUpdate(new Empty());
                     return Task.CompletedTask;
-                });
+                }, _cancelPreviousActiveTasks.Token);
                 tasks.Add(t);
             }
 
-            for (var i = 0; i < _leaseManagers.Count / 2 + 1; i++)
+            try
             {
-                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                for (var i = 0; i < _leaseManagers.Count / 2 + 1; i++)
+                {
+                    tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Task was canceled (most likely) due to a new slot having started.");
+                throw new SlotExecutionTimeoutException();
             }
 
             Monitor.Enter(this);
@@ -341,7 +365,7 @@ namespace TKVTransactionManager.Services
                                     Console.WriteLine(e.Status);
                                 }
                                 return Task.CompletedTask;
-                            });
+                            }, _cancelPreviousActiveTasks.Token);
                             tasks2.Add(t);
                         }
                     }
@@ -351,18 +375,23 @@ namespace TKVTransactionManager.Services
                         continue;
                     }
 
-                    // I think its okay now, crashed tms are ignored and suspected ones are put on hold
-                    // so (i think) now all TMs to be contacted should respond in a timely manner
-                    // although, if a TM is suspected for a long time, it might be a problem
-                    // for that i propose that we abort the transaction or use URB/whatever to try to contact the suspected TM via other TMs 
-                    Task.WaitAll(tasks2.ToArray());
-
+                    // TODO: cant wait on all of them as we don't know which ones are crashed :pensive:
+                    // if we suspect them, then we ask for a majority to of other TMs on what they think of the suspected TMs
+                    // if a majority of them think that the TM is crashed, then we can use our superseding lease and execute the transaction
+                    // otherwise, we wait for the next slot to try again (think about this bit better)
                     try
                     {
+                        Task.WaitAll(tasks2.ToArray());
+
                         // Either we spread and execute, or we don't at all
                         TwoPhaseCommit(transactionState);
                         transactionStatesToRemove.Add(transactionState);
-                    } 
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Console.WriteLine("Task was canceled (most likely) due to a new slot having started.");
+                        throw new SlotExecutionTimeoutException();
+                    }
                     catch (MajorityInsufficiencyException e)
                     {
                         Console.WriteLine(e.Message);
@@ -482,23 +511,25 @@ namespace TKVTransactionManager.Services
                         Console.WriteLine(e.Status);
                     }
                     return Task.CompletedTask;
-                });
+                }, _cancelPreviousActiveTasks.Token);
                 tasks.Add(t);
             }
 
-            // wait for a majority of them to reply
-            for (var i = 0; i < tmMajority; i++)
+            try
             {
-                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                // wait for a majority of them to reply
+                for (var i = 0; i < tmMajority; i++)
+                {
+                    tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Task was canceled (most likely) due to a new slot having started.");
+                throw new SlotExecutionTimeoutException();
             }
 
-            // todo: this wont ever happen as we wait for majority above
-            // if not a majority of them replied with ok, we can't execute the transaction
-            if (prepareResponses.Count < tmMajority)
-            {
-                Console.WriteLine($"Not enough Prepare responses received. Aborting transaction.");
-                return;
-            }
+            // if we reach here, a majority of responses were acquired and no exception thrown
 
             tasks.Clear();
             // send commit to all TMs
@@ -517,14 +548,22 @@ namespace TKVTransactionManager.Services
                         Console.WriteLine(e.Status);
                     }
                     return Task.CompletedTask;
-                });
+                }, _cancelPreviousActiveTasks.Token);
                 tasks.Add(t);
             }
 
-            // wait for a majority of them to reply
-            for (var i = 0; i < tmMajority; i++)
+            try
             {
-                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                // wait for a majority of them to reply
+                for (var i = 0; i < tmMajority; i++)
+                {
+                    tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Task was canceled (most likely) due to a new slot having started.");
+                throw new SlotExecutionTimeoutException();
             }
 
             // if we get here we execute the transaction
@@ -592,13 +631,22 @@ namespace TKVTransactionManager.Services
                         Console.WriteLine(e.Status);
                     }
                     return Task.CompletedTask;
-                });
+                }, _cancelPreviousActiveTasks.Token);
                 tasks.Add(t);
             }
-            
-            for (var i = 0; i < tmMajority; i++)
+
+            try
             {
-                tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                // Wait for a majority of them to reply
+                for (var i = 0; i < tmMajority; i++)
+                {
+                    tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Task was canceled (most likely) due to a new slot having started.");
+                throw new SlotExecutionTimeoutException();
             }
 
             // TODO: doesn't work, but once we get a majority, we ignore the rest of the responses
