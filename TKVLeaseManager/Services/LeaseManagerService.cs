@@ -430,33 +430,14 @@ namespace TKVLeaseManager.Services
                 return true;
             }
 
-            if (_statePerSlot[_currentSlot][_leader].Crashed)
+            // TODO: while or if?
+            // if leader crashed or if leader+1 process suspects him, change leader to leader+1
+            while (_statePerSlot[_currentSlot][_leader].Crashed || _statePerSlot[_currentSlot][_leader + 1].Suspects.Contains(_processBook[_leader]))
             {
-                // 1: who's the leader?
-                var leader = int.MaxValue;
-                // all before and including the leader are crashed
-                for (int i = _leader + 1; i < _statePerSlot[_currentSlot - 1].Count; i++)
-                {
-                    // If process is normal and not suspected by it's successor
-                    // A B C : B only becomes leader if C doesn't suspect it and all before are crashed
-                    if (_statePerSlot[_currentSlot][i].Crashed == false &&
-                        !_statePerSlot[_currentSlot][i + 1].Suspects.Contains(_processBook[i]))
-                    {
-                        leader = i;
-                        break;
-                    }
-                }
-
-                if (leader == int.MaxValue)
-                {
-                    //Console.WriteLine("No leader found"); // Should never happen
-                    Monitor.Exit(this);
-                    return false;
-                }
-                _leader = leader;
+                _leader = (_leader + 1) % _leaseManagerHosts.Count;
             }
 
-            // 2: am I the Leader?
+            // 2: am I the leader?
             if (_processId % _leaseManagerHosts.Count != _leader)
             {
                 //Console.WriteLine($"I'm not the leader, I'm process {_processId % _leaseManagerHosts.Count} and the leader is process {leader}");

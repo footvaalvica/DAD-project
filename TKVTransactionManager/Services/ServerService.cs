@@ -448,7 +448,7 @@ namespace TKVTransactionManager.Services
             var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId && !_crashedHosts.Contains(host.Key) &&
              !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
             
-            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 : _transactionManagers.Count() / 2 + 1;
+            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 +1: _transactionManagers.Count() / 2;
             if (reachableProcesses.Count < tmMajority)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
@@ -553,7 +553,7 @@ namespace TKVTransactionManager.Services
             Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
 
             // always reachable to self
-            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 : _transactionManagers.Count() / 2 + 1;
+            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 + 1: _transactionManagers.Count() / 2;
             if (reachableProcesses.Count < tmMajority)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
