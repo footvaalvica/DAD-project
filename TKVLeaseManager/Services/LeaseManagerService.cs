@@ -432,7 +432,8 @@ namespace TKVLeaseManager.Services
 
             // TODO: while or if?
             // if leader crashed or if leader+1 process suspects him, change leader to leader+1
-            while (_statePerSlot[_currentSlot][_leader].Crashed || _statePerSlot[_currentSlot][_leader + 1].Suspects.Contains(_processBook[_leader]))
+            while (_statePerSlot[_currentSlot][_leader].Crashed || 
+                _statePerSlot[_currentSlot][(_leader + 1) % _leaseManagerHosts.Count].Suspects.Contains(_processBook[_leader]))
             {
                 _leader = (_leader + 1) % _leaseManagerHosts.Count;
             }
