@@ -496,14 +496,13 @@ namespace TKVTransactionManager.Services
                 throw new MajorityInsufficiencyException();
             }
 
-            PrepareRequest prepareRequest = new PrepareRequest { Id = _processId };
             foreach (var host in reachableProcesses)
             {
                 var t = Task.Run(() =>
                 {
                     try
                     {
-                        PrepareResponse prepareResponse = _transactionManagers[host.Key].Prepare(prepareRequest);
+                        PrepareResponse prepareResponse = _transactionManagers[host.Key].Prepare(new PrepareRequest());
                         prepareResponses.Add(prepareResponse);
                     }
                     catch (Grpc.Core.RpcException e)
@@ -570,13 +569,8 @@ namespace TKVTransactionManager.Services
             ExecuteTransaction(transactionState);
         }
 
-        public PrepareResponse ReplyWithPrepare(PrepareRequest request)
+        public PrepareResponse ReplyWithPrepare()
         {
-            // if we receive a prepareRequest from a TM which we suspect from being crashed we remove it from the list of suspected TMs
-            if (_tmsSuspectedPerSlot[_currentSlot].Contains(request.Id))
-            {
-                _tmsSuspectedPerSlot[_currentSlot].Remove(request.Id);
-            }
             // if we get prepare request, we reply with ok
             return new PrepareResponse { };
         }

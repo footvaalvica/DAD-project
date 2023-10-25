@@ -14,7 +14,7 @@ namespace TKVTransactionManager.Services
 
         public override Task<PrepareResponse> Prepare(PrepareRequest request, ServerCallContext context)
         {
-            return Task.FromResult(serverService.ReplyWithPrepare(request));
+            return Task.FromResult(serverService.ReplyWithPrepare());
         }
 
         public override Task<CommitResponse> Commit(CommitRequest request, ServerCallContext context)
