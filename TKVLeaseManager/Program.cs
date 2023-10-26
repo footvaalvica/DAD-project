@@ -55,7 +55,7 @@ namespace TKVLeaseManager
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))
             );
 
-            List<List<ProcessState>> statePerSlot = new(); // LeaseManagers' state per slot
+            List<List<ProcessState>> statePerSlot = new() { new List<ProcessState>() }; // LeaseManagers' state per slot
             foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
                 if (dict != null)

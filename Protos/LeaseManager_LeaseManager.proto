@@ -8,7 +8,6 @@ service Paxos {
 	rpc Prepare(PrepareRequest) returns (PromiseReply);
 	rpc Accept(AcceptRequest) returns (AcceptedReply);
 	rpc Decide(DecideRequest) returns (DecideReply);
-	rpc LeaderElection(LeaderElectionRequest) returns (LeaderElectionReply);
 }
 
 message PrepareRequest {
@@ -41,13 +40,4 @@ message DecideRequest {
 }
 
 message DecideReply {
-}
-
-message LeaderElectionRequest {
-	int32 leaderId = 1;
-	repeated string suspectedProcesses = 2;
-}
-
-message LeaderElectionReply {
-	int32 leaderId = 1;
 }

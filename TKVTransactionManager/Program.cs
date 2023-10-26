@@ -73,6 +73,7 @@ namespace TKVTransactionManager
             );
 
             List<ProcessState> statePerSlot = new List<ProcessState>();
+            statePerSlot.Add(new ProcessState(false, new List<string>())); // first slot is always not crashed and not suspected
             foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
                 if (dict != null)
@@ -88,7 +89,6 @@ namespace TKVTransactionManager
 
             List<List<bool>> tmsStatePerSlot = new List<List<bool>>();
             List<List<string>> tmsSuspectedPerSlot = new List<List<string>>();
-
 
             for (int i = 0; i < config.ProcessStates.Length; i++)
             {
@@ -106,9 +106,9 @@ namespace TKVTransactionManager
                 {
                     for (int j = 0; j < config.TransactionManagers.Count; j++)
                     {
-                        tmsStatePerSlot[i].Add(config.ProcessStates[i][config.TransactionManagers[j].Id].Crashed);
+                        tmsStatePerSlot[i].Add(statePerSlot[i].Crashed);
                     }
-                    tmsSuspectedPerSlot[i] = config.ProcessStates[i][processId].Suspects; // getting the tms that each tm suspects PER slot. i = slotId
+                    tmsSuspectedPerSlot[i] = statePerSlot[i].Suspects; // getting the tms that each tm suspects PER slot. i = slotId
                 }
 
             }
