@@ -48,10 +48,9 @@ namespace TKVLeaseManager.Services
         private readonly List<List<ProcessState>> _statePerSlot;
         private readonly List<string> _processBook;
         private readonly ConcurrentDictionary<int, SlotData> _slots;
-        private int _leader = 0; // TO CHECK AFTER CHECKPOINT
+        private int _leader = int.MaxValue;
         private volatile List<LeaseRequest> _bufferLeaseRequests = new();
         private volatile bool _isDeciding = false;
-        private List<string> _badHosts = new();
 
         public LeaseManagerService(
             int processId,
@@ -102,13 +101,7 @@ namespace TKVLeaseManager.Services
             {
                 _slots[_currentSlot].IsPaxosRunning = false;
             }
-
-            _badHosts.Clear();
-            for (int i = 0; i < _processBook.Count; i++)
-            {
-                if (_statePerSlot[_currentSlot][i].Crashed)
-                    _badHosts.Add(_processBook[i]);
-            }
+            
 
             Monitor.PulseAll(this);
 
@@ -278,8 +271,7 @@ namespace TKVLeaseManager.Services
             List<PromiseReply> promiseResponses = new();
 
             List<Task> tasks = new();
-            foreach (var host in _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
-                && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key)))
+            foreach (var host in _leaseManagerHosts.Where(host => !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key)))
             {
                 var t = Task.Run(() =>
                 {
@@ -321,8 +313,7 @@ namespace TKVLeaseManager.Services
 
             var acceptResponses = new List<AcceptedReply>();
 
-            var tasks = _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
-                && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
+            var tasks = _leaseManagerHosts.Where(host => !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
                 {
                     //Console.WriteLine("Sending accept request");
@@ -363,8 +354,7 @@ namespace TKVLeaseManager.Services
 
             //Console.WriteLine($"({slot}) Sending Decide({writeTimestamp},{lease})");
             // send decide to self (also a learner) and to other correct hosts
-            foreach (var t in _leaseManagerHosts.Where(host => !_badHosts.Contains(host.Key)
-              && !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
+            foreach (var t in _leaseManagerHosts.Where(host => !_statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects.Contains(host.Key))
                 .Select(host => Task.Run(() =>
             {
                 try
@@ -430,13 +420,22 @@ namespace TKVLeaseManager.Services
                 return true;
             }
 
-            // TODO: while or if?
-            // if leader crashed or if leader+1 process suspects him, change leader to leader+1
-            while (_statePerSlot[_currentSlot][_leader].Crashed || 
-                _statePerSlot[_currentSlot][(_leader + 1) % _leaseManagerHosts.Count].Suspects.Contains(_processBook[_leader]))
+            // TODO: select leader
+            // Send leader election to all processes
+            var leader = _leader;
+            var suspects = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects;
+
+            Console.WriteLine("REMOVE ME! i am debug print");
+            foreach (var suspect in suspects)
             {
-                _leader = (_leader + 1) % _leaseManagerHosts.Count;
+                Console.WriteLine($"Suspect: {suspect}");
             }
+
+            var leaderElectionRequest = new LeaderElectionRequest
+            {
+                LeaderId = _processId
+            };
+
 
             // 2: am I the leader?
             if (_processId % _leaseManagerHosts.Count != _leader)
@@ -498,6 +497,25 @@ namespace TKVLeaseManager.Services
             var retVal = WaitForPaxos(slot);
             return retVal;
         }
+
+        public LeaderElectionReply LeaderElection(LeaderElectionRequest request)
+        {
+            Monitor.Enter(this);
+            while (_isCrashed)
+            {
+                Monitor.Wait(this);
+            }
+
+            Console.WriteLine($"Received Leader Election request from {request.LeaderId}");
+
+            var reply = new LeaderElectionReply
+            {
+                LeaderId = _leader
+            };
+
+            Monitor.Exit(this);
+            return reply;
+        }   
 
         public StatusUpdateResponse StatusUpdate()
         {

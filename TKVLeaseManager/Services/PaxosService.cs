@@ -1,4 +1,5 @@
-﻿using Grpc.Core;
+﻿using System.Runtime.CompilerServices;
+using Grpc.Core;
 using LeaseManagerLeaseManagerServiceProto;
 
 namespace TKVLeaseManager.Services
@@ -25,6 +26,12 @@ namespace TKVLeaseManager.Services
         public override Task<DecideReply> Decide(DecideRequest request, ServerCallContext context)
         {
             return Task.FromResult(_leaseManagerService.DecidePaxos(request));
+        }
+
+        public override Task<LeaderElectionReply> LeaderElection(LeaderElectionRequest request,
+            ServerCallContext context)
+        {
+            return Task.FromResult(_leaseManagerService.LeaderElection(request));
         }
     }
 }
