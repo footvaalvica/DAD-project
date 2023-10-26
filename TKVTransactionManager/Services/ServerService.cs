@@ -28,7 +28,7 @@ namespace TKVTransactionManager.Services
 
     public struct TransactionState
     {
-        public List<string> Permissions { get; set; }
+        public List<(string, bool)> Permissions { get; set; }
         public TransactionRequest Request { get; set; }
         public int Index { get; set; }
     }
@@ -197,7 +197,7 @@ namespace TKVTransactionManager.Services
 
             _dadIntsRead = new List<DADInt>();
 
-            var transactionState = new TransactionState { Permissions = new List<string>(), Request = transactionRequest };
+            var transactionState = new TransactionState { Permissions = new List<(string, bool)>(), Request = transactionRequest };
 
             Console.WriteLine($"Received transaction request from: {transactionRequest.Id}");
 
@@ -205,17 +205,17 @@ namespace TKVTransactionManager.Services
             leasesRequired.AddRange(transactionRequest.Writes.Select(dadint => dadint.Key));
 
             // check if has all leases
-            transactionState.Permissions = leasesRequired
-                .Where(lease => !_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(lease)))
-                .ToList();
+            List<string> temp = leasesRequired.Where(lease => !_leasesHeld.Any(leaseHeld => leaseHeld.Permissions.Contains(lease))).ToList();
+            foreach (var lease in temp) { transactionState.Permissions.Add((lease, false)); }
+
             _transactionsState.Add(transactionState);
             
             // if TM doesn't have all leases, it must request them
-            if (transactionState.Permissions.Count > 0)
+            if (transactionState.Permissions.Where(perm => !perm.Item2).Count() > 0)
             {
                 Console.WriteLine($"Requesting leases...");
                 var lease = new Lease { Id = _processId };
-                lease.Permissions.AddRange(transactionState.Permissions);
+                lease.Permissions.AddRange(transactionState.Permissions.Where(perm => !perm.Item2).Select(perm => perm.Item1)); // get perms not yet obtained
                 var leaseRequest = new LeaseRequest { Slot = _currentSlot, Lease = lease };
 
                 var tasks = new List<Task>();
@@ -322,7 +322,7 @@ namespace TKVTransactionManager.Services
             foreach (var transactionState in _transactionsState)
             {
                 // if TM has all the leases required to execute it, do so
-                if (transactionState.Permissions.Count == 0)
+                if (transactionState.Permissions.Where(perm => !perm.Item2).Count() == 0)
                 {
                     // check for conflicting leases given on same slot
 
@@ -450,7 +450,7 @@ namespace TKVTransactionManager.Services
                     foreach (TransactionState transactionState in _transactionsState)
                     {
                         // if the lease is in the list of leases required to execute the transaction, remove it from the list
-                        transactionState.Permissions.RemoveAll(permRequired => lease.Permissions.Contains(permRequired));
+                        transactionState.Permissions.Where(perm => lease.Permissions.Contains(perm.Item1)).ToList().ForEach(perm => perm.Item2 = true);
                     }
                 }
                 else
@@ -741,7 +741,7 @@ namespace TKVTransactionManager.Services
             // TODO: does this completely reset the TM
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _dadIntsRead = new List<DADInt>();
-            _transactionsState = new List<TransactionState>();
+            _transactionsState.ForEach(_leasesHeld => _leasesHeld.Permissions.ForEach(perm => perm.Item2 = false)); // reset permissions for transactions
             _writeLog = new List<DADInt>();
             WriteTransactions(updateResponse.Writes);
 
@@ -767,7 +767,8 @@ namespace TKVTransactionManager.Services
             /* get the transactionState that has the lease that is in the request
              When that transactionState is not in _transactionsState anymore, we remove the lease in the request from _leasesHeld
              */
-            var transactionState = _transactionsState.Find(transactionState => transactionState.Permissions.Contains(request.Lease.Permissions[0]));
+            var transactionState = _transactionsState.Find(transactionState => transactionState.Permissions
+              .Select(perm => perm.Item1).Contains(request.Lease.Permissions[0]));
             while (_transactionsState.Contains(transactionState))
             {
                 // thread will be woken up by the monitorpulseall in the execute transaction method
