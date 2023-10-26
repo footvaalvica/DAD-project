@@ -1,0 +1,15 @@
+﻿syntax = "proto3";
+
+package Client_LeaseManagerProto;
+
+import "Transaction.proto";
+import "google/protobuf/empty.proto";
+
+message LeaseRequest {
+	int32 slot = 1;
+	string lease = 2;
+}
+
+service Client_LeaseManagerService {
+	rpc Lease(LeaseRequest) returns (google.protobuf.Empty);
+}

@@ -8,6 +8,7 @@
     <StartupObject>TKVClient.Program</StartupObject>
   </PropertyGroup>
 
+
   <ItemGroup>
 	<PackageReference Include="Google.Protobuf" Version="3.24.3" />
     <PackageReference Include="Grpc.Net.Client" Version="2.57.0" />
@@ -18,6 +19,7 @@
 	</PackageReference>
 	<ProjectReference Include="..\Utilities\Utilities.csproj" />
 	<Protobuf Include="..\Protos\Client_TransactionManager.proto" GrpcServices="Client" Link="Protos\Client_TransactionManager.proto" />
+	<Protobuf Include="..\Protos\Client_LeaseManager.proto" GrpcServices="Client" Link="Protos\Client_LeaseManager.proto" />
 	<Protobuf Include="..\Protos\Transaction.proto" GrpcServices="Both" Link="Protos\Transaction.proto" />
   </ItemGroup>
 
