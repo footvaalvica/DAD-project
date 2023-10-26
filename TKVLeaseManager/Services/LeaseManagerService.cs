@@ -8,6 +8,7 @@ using Google.Protobuf.WellKnownTypes;
 
 namespace TKVLeaseManager.Services
 {
+    using ClientLeaseManagerProto;
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -119,6 +120,18 @@ namespace TKVLeaseManager.Services
 
             //Console.WriteLine("Ending preparation -----------------------");
             Monitor.Exit(this);
+        }
+
+        public StatusResponseLM Status(StatusRequestLM request)
+        {
+            Console.WriteLine("<<<<<<<<<<<<< STATUS >>>>>>>>>>>>>>>>");
+            Console.WriteLine($"Status request received for Lease Manager {_processName}");
+            Console.WriteLine($"    Current slot: {_currentSlot} - corresponds to paxos epoch");
+            Console.WriteLine($"    State: " + (_isCrashed ? "Crashe" : "Normal"));
+            Console.WriteLine($"    Is deciding: {_isDeciding}");
+            Console.WriteLine("<<<<<<<<<<<<< STATUS >>>>>>>>>>>>>>>>");
+
+            return new StatusResponseLM { };
         }
 
         /*

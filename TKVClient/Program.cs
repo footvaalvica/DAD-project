@@ -8,9 +8,11 @@ using Grpc.Core;
 namespace TKVClient
 {
     using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
+    using LeaseManagers = Dictionary<string, Client_LeaseManagerService.Client_LeaseManagerServiceClient>;
     internal class Program
     {
         static TransactionManagers? transactionManagers = null;
+        static LeaseManagers? leaseManagers = null;
         static TKVConfig config;
         static void Wait(string[] command)
         {
@@ -48,20 +50,18 @@ namespace TKVClient
             }
         }
 
-        static bool Status()
+        static void Status()
         {
-            StatusRequest request = new StatusRequest();
+            StatusRequestTM requestTM = new StatusRequestTM();
 
-            List<Task> tasks = new List<Task>();
+            List<Task> tasksTMs = new List<Task>();
             foreach (var tm in transactionManagers)
             {
                 Task t = Task.Run(() =>
                 {
                     try
                     {
-                        StatusResponse statusResponse = tm.Value.Status(request);
-                        if (statusResponse.Status)
-                            Console.WriteLine($"Status: Transaction Manager with id ({tm.Key}) is alive!");
+                        tm.Value.Status(requestTM);
                     }
                     catch (Grpc.Core.RpcException e)
                     {
@@ -71,10 +71,29 @@ namespace TKVClient
                     return Task.CompletedTask;
                 });
 
-                tasks.Add(t);
+                tasksTMs.Add(t);
             }
-            Task.WaitAll(tasks.ToArray());
-            return true;
+
+            StatusRequestLM requestLM = new StatusRequestLM();
+            List<Task> tasksLMs = new List<Task>();
+            foreach (var lm in leaseManagers)
+            {
+                Task t = Task.Run(() =>
+                {
+                    try
+                    {
+                        lm.Value.Status(requestLM);
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+
+                    return Task.CompletedTask;
+                });
+
+                tasksLMs.Add(t);
+            }
         }
 
         static List<DADInt> TxSubmit(string id, List<String> reads, List<DADInt> writes)
@@ -191,7 +210,7 @@ namespace TKVClient
                     break;
                 case "s":
                     Console.WriteLine("Sending status request...");
-                    _ = Status();
+                    Status();
                     break;
                 case "q":
                     Console.WriteLine("Closing client...");
@@ -237,6 +256,12 @@ namespace TKVClient
             {
                 GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
                 return new Client_TransactionManagerService.Client_TransactionManagerServiceClient(channel);
+            });
+
+            leaseManagers = config.LeaseManagers.ToDictionary(key => key.Id, value =>
+            {
+                GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
+                return new Client_LeaseManagerService.Client_LeaseManagerServiceClient(channel);
             });
 
             // Read client scripts
