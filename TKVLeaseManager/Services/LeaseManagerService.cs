@@ -48,9 +48,9 @@ namespace TKVLeaseManager.Services
         private readonly List<List<ProcessState>> _statePerSlot;
         private readonly List<string> _processBook;
         private readonly ConcurrentDictionary<int, SlotData> _slots;
-        private int _leader = 0; // TO CHECK AFTER CHECKPOINT
+        private int _leader; // TO CHECK AFTER CHECKPOINT
         private volatile List<LeaseRequest> _bufferLeaseRequests = new();
-        private volatile bool _isDeciding = false;
+        private volatile bool _isDeciding;
         private List<string> _badHosts = new();
 
         public LeaseManagerService(
@@ -93,21 +93,15 @@ namespace TKVLeaseManager.Services
 
             //Console.WriteLine($"Have ({_bufferLeaseRequests.Count}) requests to process for this slot");
 
-            // Switch process state
-            _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
-            // _processId % _leaseManagerHosts.Count -> since we increment processId every slot, we need to do this operation to guarantee that the index is always between 0 and #LMs - 1
-            Console.WriteLine($"State: Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}\n");
+            
 
             if (_currentSlot > 0)
             {
                 _slots[_currentSlot].IsPaxosRunning = false;
-            }
-
-            _badHosts.Clear();
-            for (int i = 0; i < _processBook.Count; i++)
-            {
-                if (_statePerSlot[_currentSlot][i].Crashed)
-                    _badHosts.Add(_processBook[i]);
+                // Switch process state
+                _isCrashed = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Crashed;
+                // _processId % _leaseManagerHosts.Count -> since we increment processId every slot, we need to do this operation to guarantee that the index is always between 0 and #LMs - 1
+                Console.WriteLine($"State: Process is now {(_isCrashed ? "crashed" : "normal")} for slot {_currentSlot}\n");
             }
 
             Monitor.PulseAll(this);
@@ -429,13 +423,16 @@ namespace TKVLeaseManager.Services
                 //Console.WriteLine("Paxos is not running and a value has been decided");
                 return true;
             }
-
-            // TODO: while or if?
-            // if leader crashed or if leader+1 process suspects him, change leader to leader+1
-            while (_statePerSlot[_currentSlot][_leader].Crashed || 
-                _statePerSlot[_currentSlot][(_leader + 1) % _leaseManagerHosts.Count].Suspects.Contains(_processBook[_leader]))
+            
+            // TODO: check this
+            // if i suspect the leader process and leader is the process id imediately below mine, change leader to me, and if i suspect the process with the higest id, the leader goes to the process with the lowest id
+            if (_statePerSlot[_currentSlot][_leader].Suspects.Contains(_processBook[_leader]) && _leader == (_processId + 1) % _leaseManagerHosts.Count)
             {
-                _leader = (_leader + 1) % _leaseManagerHosts.Count;
+                _leader = _processId % _leaseManagerHosts.Count;
+            }
+            else if (_statePerSlot[_currentSlot][_leaseManagerHosts.Count - 1].Suspects.Contains(_processBook[_leaseManagerHosts.Count - 1]))
+            {
+                _leader = 0;
             }
 
             // 2: am I the leader?
