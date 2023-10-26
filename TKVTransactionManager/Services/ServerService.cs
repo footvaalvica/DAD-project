@@ -7,6 +7,7 @@ using Google.Protobuf.Collections;
 using System.Diagnostics;
 using ExtensionMethods;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace ExtensionMethods
 {
@@ -64,6 +65,8 @@ namespace TKVTransactionManager.Services
         private List<DADInt> _writeLog;
 
         private List<string> _processBook;
+
+        private List<string> _reachableTMs = new();
 
         private CancellationTokenSource _cancelPreviousActiveTasks;
 
@@ -131,13 +134,16 @@ namespace TKVTransactionManager.Services
                 return;
             }
 
+            // unsuspected hosts + not including self
+            _reachableTMs = _transactionManagers.Where(host => host.Key != _processId && !_tmsSuspectedPerSlot[_currentSlot]
+                .Contains(host.Key)).Select(host => host.Key).ToList();
+
             Monitor.PulseAll(this);
 
             try
             {
                 Console.WriteLine("Updating Transaction Log");
                 UpdateTransactionLogStatus();
-
                 Console.WriteLine("Requesting a Paxos Update");
                 AskForLeaseManagersStatus();
             }
@@ -148,6 +154,12 @@ namespace TKVTransactionManager.Services
                 return;
             }
             catch (SlotExecutionTimeoutException e)
+            {
+                Console.WriteLine(e.Message);
+                Monitor.Exit(this);
+                return;
+            }
+            catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 Monitor.Exit(this);
@@ -241,6 +253,7 @@ namespace TKVTransactionManager.Services
             Console.WriteLine("Requesting status update from lease managers...");
             var statusUpdateResponse = new StatusUpdateResponse();
             var tasks = new List<Task>();
+
             foreach (var host in _leaseManagers)
             {
                 var t = Task.Run(() =>
@@ -341,7 +354,18 @@ namespace TKVTransactionManager.Services
                             // if it's been given to a suspected TM, leave transaction for next slot to avoid conflicts
                             if (_tmsSuspectedPerSlot[_currentSlot].Contains(leaseToWaitOn.Id))
                             {
-                                throw new SuspectedProcessWaitException();
+                                // 1: ask majority opinion on whether the TM is crashed or not
+                                if (SuspicionConsensus(leaseToWaitOn.Id))
+                                {
+                                    // 2: if majority says it's crashed, execute the transaction
+                                    // 3: save information about tm being crashed for this slot? --> given teacher's answer, prolly not
+                                    continue;
+                                }
+                                else
+                                {
+                                    // skip this transaction for this slot
+                                    break;
+                                }
                             };
 
                             var t = Task.Run(() =>
@@ -360,10 +384,9 @@ namespace TKVTransactionManager.Services
                             tasks2.Add(t);
                         }
                     }
-                    catch (SuspectedProcessWaitException e)
+                    catch (MajorityInsufficiencyException e)
                     {
                         Console.WriteLine(e.Message);
-                        continue;
                     }
 
                     // TODO: cant wait on all of them as we don't know which ones are crashed :pensive:
@@ -383,7 +406,7 @@ namespace TKVTransactionManager.Services
                         Console.WriteLine("Task was canceled (most likely) due to a new slot having started.");
                         throw new SlotExecutionTimeoutException();
                     }
-                    catch (MajorityInsufficiencyException e)
+                    catch (Exception e)
                     {
                         Console.WriteLine(e.Message);
                     }
@@ -426,6 +449,53 @@ namespace TKVTransactionManager.Services
                     }
                 }
             }
+        }
+
+        public bool SuspicionConsensus(string suspectedId)
+        {
+            int agreeingProcesses = 1; // me!
+            var tasks = new List<Task>();
+
+            if (_reachableTMs.Count < _transactionManagers.Count / 2)
+            {
+                Console.WriteLine("Not enough processes to reach a majority, aborting update...");
+                throw new MajorityInsufficiencyException();
+            }
+
+            foreach (var host in _transactionManagers.Where(host => _reachableTMs.Contains(host.Key)))
+            {
+                var t = Task.Run(() =>
+                {
+                    SuspicionConsensusRequest suspicionRequest = new SuspicionConsensusRequest { SuspectedId = suspectedId };
+                    SuspicionConsensusResponse suspicionResponse = _transactionManagers[host.Key].SuspicionCheck(suspicionRequest);
+                    if (suspicionResponse.Opinion == true) { agreeingProcesses++; }
+
+                    return Task.CompletedTask;
+                }, _cancelPreviousActiveTasks.Token);
+                tasks.Add(t);
+            }
+
+            // TODO should change everywhere to check if majority can be established in the first place
+            try
+            {
+                for (var i = 0; i < _transactionManagers.Count / 2; i++)
+                {
+                    tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Task was canceled (most likely) due to a new slot having started.");
+                throw new SlotExecutionTimeoutException();
+            }
+
+            return agreeingProcesses > _transactionManagers.Count / 2;
+        }
+
+        public SuspicionConsensusResponse SuspicionCheck(SuspicionConsensusRequest request)
+        {
+            bool opinion = _tmsSuspectedPerSlot[_currentSlot].Contains(request.SuspectedId);
+            return new SuspicionConsensusResponse { Opinion = opinion };
         }
 
         public void ExecuteTransaction(TransactionState transactionState)
@@ -476,18 +546,17 @@ namespace TKVTransactionManager.Services
             Console.WriteLine("$Sending Prepare to all tms...");
             List<Task> tasks = new List<Task>();
             var prepareResponses = new List<PrepareResponse>();
-
-            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId &&
-             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
             
-            int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count / 2 +1: _transactionManagers.Count / 2;
-            if (reachableProcesses.Count < tmMajority)
+            //int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 +1: _transactionManagers.Count() / 2; // TODO: isnt it always /2+1 actually?
+            // counting with self
+            if (_reachableTMs.Count < _transactionManagers.Count / 2)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
                 throw new MajorityInsufficiencyException();
             }
 
-            foreach (var host in reachableProcesses)
+            PrepareRequest prepareRequest = new PrepareRequest { };
+            foreach (var host in _transactionManagers.Where(host => _reachableTMs.Contains(host.Key)))
             {
                 var t = Task.Run(() =>
                 {
@@ -508,7 +577,7 @@ namespace TKVTransactionManager.Services
             try
             {
                 // wait for a majority of them to reply
-                for (var i = 0; i < tmMajority; i++)
+                for (var i = 0; i < _transactionManagers.Count / 2; i++)
                 {
                     tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
                 }
@@ -523,7 +592,7 @@ namespace TKVTransactionManager.Services
 
             tasks.Clear();
             // send commit to all TMs
-            foreach (var host in reachableProcesses)
+            foreach (var host in _transactionManagers.Where(host => _reachableTMs.Contains(host.Key)))
             {
                 var t = Task.Run(() =>
                 {
@@ -545,7 +614,7 @@ namespace TKVTransactionManager.Services
             try
             {
                 // wait for a majority of them to reply
-                for (var i = 0; i < tmMajority; i++)
+                for (var i = 0; i < _transactionManagers.Count / 2; i++)
                 {
                     tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
                 }
@@ -588,21 +657,14 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            // filter processes that are not crashed and that we don't suspect to be crashed
-            var reachableProcesses = _transactionManagers.Where(host => host.Key != _processId &&
-             !_tmsSuspectedPerSlot[_currentSlot].Contains(host.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
-
-            Console.WriteLine($"    Got ({reachableProcesses.Count}) reachable processes.");
-
-            // always reachable to self
-            int tmMajority = (_transactionManagers.Count % 2 == 0) ? _transactionManagers.Count / 2 + 1: _transactionManagers.Count / 2;
-            if (reachableProcesses.Count < tmMajority)
+            //int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 + 1: _transactionManagers.Count() / 2; // todo: isnt it always /2+1
+            if (_reachableTMs.Count < _transactionManagers.Count / 2)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
                 throw new MajorityInsufficiencyException();
             }
 
-            foreach (var host in reachableProcesses)
+            foreach (var host in _transactionManagers.Where(host => _reachableTMs.Contains(host.Key) || host.Key == _processId))
             {
                 var t = Task.Run(() =>
                 {
@@ -622,8 +684,8 @@ namespace TKVTransactionManager.Services
 
             try
             {
-                // Wait for a majority of them to reply
-                for (var i = 0; i < tmMajority; i++)
+                // Wait for a majority of them to reply (+self response)
+                for (var i = 0; i < _transactionManagers.Count / 2 + 1; i++)
                 {
                     tasks.RemoveAt(Task.WaitAny(tasks.ToArray()));
                 }
@@ -670,11 +732,6 @@ namespace TKVTransactionManager.Services
             WriteTransactions(updateResponse.Writes);
 
             Console.WriteLine($"Updated local log to the latest one!");
-            // TODO: remove this print (sometimes crashes)
-            foreach (var dadint in _writeLog)
-            {
-                Console.WriteLine($"{dadint.Key} = {dadint.Value}");
-            }
 
             Monitor.Exit(this);
         }
