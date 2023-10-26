@@ -101,7 +101,6 @@ namespace TKVLeaseManager.Services
             {
                 _slots[_currentSlot].IsPaxosRunning = false;
             }
-            
 
             Monitor.PulseAll(this);
 
@@ -420,10 +419,10 @@ namespace TKVLeaseManager.Services
                 return true;
             }
 
-            // TODO: select leader
+            // TODO IMPORTANT: shouldn't have to be -1, but is for some reason
             // Send leader election to all processes
             var leader = _leader;
-            var suspects = _statePerSlot[_currentSlot][_processId % _leaseManagerHosts.Count].Suspects;
+            var suspects = _statePerSlot[_currentSlot - 1][_processId % _leaseManagerHosts.Count].Suspects;
 
             Console.WriteLine("REMOVE ME! i am debug print");
             foreach (var suspect in suspects)
@@ -431,10 +430,9 @@ namespace TKVLeaseManager.Services
                 Console.WriteLine($"Suspect: {suspect}");
             }
 
-            var leaderElectionRequest = new LeaderElectionRequest
-            {
-                LeaderId = _processId
-            };
+            // SEND LEADER ELECTION REQUEST TO ALL PROCESSES
+            var leaderResponses = new List<LeaderElectionReply>();
+
 
 
             // 2: am I the leader?
