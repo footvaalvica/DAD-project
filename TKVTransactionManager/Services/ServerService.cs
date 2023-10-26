@@ -169,10 +169,24 @@ namespace TKVTransactionManager.Services
             Monitor.Exit(this);
         }
  
-        public StatusResponse Status(StatusRequest statusRequest)
+        public StatusResponseTM Status(StatusRequestTM statusRequest)
         {
-            if (_isCrashed) { Monitor.Wait(this); }
-            return new StatusResponse { Status = true };
+            Console.WriteLine("<<<<<<<<<<<<< STATUS >>>>>>>>>>>>>>>>");
+            Console.WriteLine($" Status request received for TM " + _processId);
+            Console.WriteLine($"    Current slot: {_currentSlot}");
+            Console.WriteLine($"    State: " + (_isCrashed ? "crashed" : "normal"));
+            Console.WriteLine($"    WriteLog size: {_writeLog.Count}");
+            foreach (var dadint in _writeLog)
+            {
+                Console.WriteLine($"        {dadint.Key}: {dadint.Value}");
+            }
+            Console.WriteLine($"    Leases held: {_leasesHeld.Count}");
+            foreach (var lease in _leasesHeld)
+            {
+                Console.WriteLine($"        {lease.Id}: {string.Join(", ", lease.Permissions)}");
+            }
+            Console.WriteLine("<<<<<<<<<<<<< STATUS >>>>>>>>>>>>>>>>");
+            return new StatusResponseTM { };
         }
 
         public TransactionResponse TxSubmit(TransactionRequest transactionRequest)
