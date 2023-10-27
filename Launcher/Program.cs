@@ -66,15 +66,27 @@ namespace Launcher
                 return;
             }
 
+            var createdProcesses = new List<Process>();
             foreach (var line in File.ReadLines(configPath))
             {
                 string[] configArgs = line.Split(" ");
                 
                 if (configArgs[0].Equals("P"))
                 {
-                    CreateProcess(baseDirectory, starttime, configArgs);
+                    createdProcesses.Add(CreateProcess(baseDirectory, starttime, configArgs));
                 }
             }
+
+
+            // if the enter key is pressed, kill all processes
+            Console.WriteLine("Press enter to kill all processes");
+            Console.ReadLine();
+            foreach (var process in createdProcesses)
+            {
+                process.Kill();
+            }
+            // exit the program
+            Environment.Exit(0);
         }
     }
 } 
