@@ -1,0 +1,2 @@
+First, open the project using Visual Studio 2022
+Then, select the launcher process in the list of processes to launch.
