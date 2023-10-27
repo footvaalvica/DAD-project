@@ -1,2 +1,6 @@
 First, open the project using Visual Studio 2022
 Then, select the launcher process in the list of processes to launch.
+
+Note:
+In the config.txt files, there cannot be a slot number 0.
+We assumed that slots begin in slot 1, as in the provided config example file, so a slot of 0 breaks the config reading.
