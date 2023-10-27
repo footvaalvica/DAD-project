@@ -1,6 +1,7 @@
 syntax = "proto3";
+import "google/protobuf/wrappers.proto";
 
 message DADInt {
 	string key = 1;
-	int32 value = 2;
+	google.protobuf.Int32Value value = 2;
 }

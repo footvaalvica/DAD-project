@@ -1,0 +1,13 @@
+﻿syntax = "proto3";
+
+package Client_LeaseManagerProto;
+
+import "Transaction.proto";
+import "google/protobuf/empty.proto";
+
+message StatusRequestLM { }
+message StatusResponseLM { }
+
+service Client_LeaseManagerService {
+	rpc Status(StatusRequestLM) returns (StatusResponseLM);
+}

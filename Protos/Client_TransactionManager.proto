@@ -14,13 +14,11 @@ message TransactionResponse {
 	repeated DADInt response = 1;
 }
 
-message StatusRequest { }
+message StatusRequestTM { }
 
-message StatusResponse {
-	bool status = 1;
-}
+message StatusResponseTM { }
 
 service Client_TransactionManagerService {
 	rpc TxSubmit(TransactionRequest) returns (TransactionResponse);
-	rpc Status(StatusRequest) returns (StatusResponse);
+	rpc Status(StatusRequestTM) returns (StatusResponseTM);
 }

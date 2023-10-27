@@ -1,15 +1,17 @@
 ﻿using Grpc.Net.Client;
 using Utilities;
 using ClientTransactionManagerProto;
+using ClientLeaseManagerProto;
 using System.Text.RegularExpressions;
-using Grpc.Core;
 
 namespace TKVClient
 {
     using TransactionManagers = Dictionary<string, Client_TransactionManagerService.Client_TransactionManagerServiceClient>;
+    using LeaseManagers = Dictionary<string, Client_LeaseManagerService.Client_LeaseManagerServiceClient>;
     internal class Program
     {
         static TransactionManagers? transactionManagers = null;
+        static LeaseManagers? leaseManagers = null;
         static TKVConfig config;
         static void Wait(string[] command)
         {
@@ -31,7 +33,7 @@ namespace TKVClient
                             return;
                         }
 
-                        //Sleep for a shorter interval to make the check more responsive
+                        // Sleep for a shorter interval to make the check more responsive
                         Thread.Sleep(100);
                     }
                     Console.WriteLine("Wait completed.");
@@ -49,18 +51,16 @@ namespace TKVClient
 
         static bool Status()
         {
-            StatusRequest request = new StatusRequest();
+            StatusRequestTM requestTM = new StatusRequestTM();
 
-            List<Task> tasks = new List<Task>();
+            List<Task> tasksTMs = new List<Task>();
             foreach (var tm in transactionManagers)
             {
                 Task t = Task.Run(() =>
                 {
                     try
                     {
-                        StatusResponse statusResponse = tm.Value.Status(request);
-                        if (statusResponse.Status)
-                            Console.WriteLine($"Status: Transaction Manager with id ({tm.Key}) is alive!");
+                        tm.Value.Status(requestTM);
                     }
                     catch (Grpc.Core.RpcException e)
                     {
@@ -70,9 +70,30 @@ namespace TKVClient
                     return Task.CompletedTask;
                 });
 
-                tasks.Add(t);
+                tasksTMs.Add(t);
             }
-            Task.WaitAll(tasks.ToArray());
+
+            StatusRequestLM requestLM = new StatusRequestLM();
+            List<Task> tasksLMs = new List<Task>();
+            foreach (var lm in leaseManagers)
+            {
+                Task t = Task.Run(() =>
+                {
+                    try
+                    {
+                        lm.Value.Status(requestLM);
+                    }
+                    catch (Grpc.Core.RpcException e)
+                    {
+                        Console.WriteLine(e.Status);
+                    }
+
+                    return Task.CompletedTask;
+                });
+
+                tasksLMs.Add(t);
+            }
+
             return true;
         }
 
@@ -109,7 +130,6 @@ namespace TKVClient
                     Console.WriteLine(e.Status);
                     indexTM = (++indexTM) % transactionManagers.Count;
                     tm = config.TransactionManagers[indexTM].Id;
-                    //Console.WriteLine($"TM is now {tm}");
                 }
             }   
 
@@ -124,11 +144,6 @@ namespace TKVClient
                 string[] reads = command[1].Substring(1, command[1].Length - 2)
                     .Split(',', StringSplitOptions.RemoveEmptyEntries);
                 reads = reads.Select(read => read.Trim('"')).ToArray();
-
-                foreach (string read in reads)
-                {
-                    //Console.WriteLine("DADINT: [" + read + "]");
-                }
 
                 Regex rg = new Regex(@"<""([^""]+)"",(\d+)>");
                 MatchCollection matched = rg.Matches(command[2]);
@@ -147,10 +162,7 @@ namespace TKVClient
                         string number = match.Groups[i + 1].Value;
                         try
                         {
-                            //Console.WriteLine("DADINT: [" + key + ", " + number + "]");
-
                             writesList.Add(new DADInt { Key = key, Value = int.Parse(number) });
-
                         }
                         catch (FormatException)
                         {
@@ -162,7 +174,7 @@ namespace TKVClient
                 List<DADInt> dadintsRead = TxSubmit(processId, reads.ToList(), writesList);
                 foreach (DADInt dadint in dadintsRead)
                 {
-                    Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]");
+                    Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]"); // Print DadInts Read by TM
                 }
             }
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
@@ -238,6 +250,12 @@ namespace TKVClient
                 return new Client_TransactionManagerService.Client_TransactionManagerServiceClient(channel);
             });
 
+            leaseManagers = config.LeaseManagers.ToDictionary(key => key.Id, value =>
+            {
+                GrpcChannel channel = GrpcChannel.ForAddress(value.Url);
+                return new Client_LeaseManagerService.Client_LeaseManagerServiceClient(channel);
+            });
+
             // Read client scripts
             string baseDirectory = Common.GetSolutionDirectory();
             string scriptFilePath = Path.Join(baseDirectory, "TKVClient", "Scripts", scriptName + ".txt");
@@ -281,7 +299,6 @@ namespace TKVClient
 
             // Optional: Read the key to clear the input buffer and exit
             Console.ReadKey(intercept: true);
-
         }
     }
 }

@@ -3,6 +3,7 @@ using Grpc.Net.Client;
 using LeaseManagerLeaseManagerServiceProto;
 using TKVLeaseManager.Services;
 using TransactionManagerLeaseManagerServiceProto;
+using ClientLeaseManagerProto;
 using Utilities;
 
 namespace TKVLeaseManager
@@ -55,7 +56,7 @@ namespace TKVLeaseManager
                 value => new Paxos.PaxosClient(GrpcChannel.ForAddress(value.Url))
             );
 
-            List<List<ProcessState>> statePerSlot = new(); // LeaseManagers' state per slot
+            List<List<ProcessState>> statePerSlot = new() { new List<ProcessState>() }; // LeaseManagers' state per slot
             foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
                 if (dict != null)
@@ -77,7 +78,8 @@ namespace TKVLeaseManager
             {
                 Services = {
                     Paxos.BindService(new PaxosService(leaseManagerService)),
-                    TransactionManager_LeaseManagerService.BindService(new RequestLeaseService(leaseManagerService))
+                    TransactionManager_LeaseManagerService.BindService(new RequestLeaseService(leaseManagerService)),
+                    Client_LeaseManagerService.BindService(new LMService(leaseManagerService))
                 },
                 Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
             };

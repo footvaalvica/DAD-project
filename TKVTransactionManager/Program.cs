@@ -11,9 +11,6 @@ namespace TKVTransactionManager
     internal class Program
     {
         static Timer timer;
-
-        // TODO: change this back before submitting
-
         static private void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
         {
             TimeSpan timeToGo = TimeSpan.Zero;
@@ -62,9 +59,9 @@ namespace TKVTransactionManager
             (int slotDuration, _) = config.SlotDetails;
 
             // TransactionManager <-> TransactionManager 
-            Dictionary<string, TwoPhaseCommit.TwoPhaseCommitClient> transactionManagers = config.TransactionManagers.ToDictionary(
+            Dictionary<string, Gossip.GossipClient> transactionManagers = config.TransactionManagers.ToDictionary(
                 key => key.Id,
-                value => new TwoPhaseCommit.TwoPhaseCommitClient(GrpcChannel.ForAddress(value.Url))
+                value => new Gossip.GossipClient(GrpcChannel.ForAddress(value.Url))
             );
             // TransactionManager  <-> LeaseManager 
             Dictionary<string, TransactionManager_LeaseManagerService.TransactionManager_LeaseManagerServiceClient> leaseManagers = config.LeaseManagers.ToDictionary(
@@ -73,6 +70,7 @@ namespace TKVTransactionManager
             );
 
             List<ProcessState> statePerSlot = new List<ProcessState>();
+            statePerSlot.Add(new ProcessState(false, new List<string>())); // first slot is always not crashed and not suspected
             foreach (Dictionary<string, ProcessState> dict in config.ProcessStates)
             {
                 if (dict != null)
@@ -88,7 +86,6 @@ namespace TKVTransactionManager
 
             List<List<bool>> tmsStatePerSlot = new List<List<bool>>();
             List<List<string>> tmsSuspectedPerSlot = new List<List<string>>();
-
 
             for (int i = 0; i < config.ProcessStates.Length; i++)
             {
@@ -106,21 +103,22 @@ namespace TKVTransactionManager
                 {
                     for (int j = 0; j < config.TransactionManagers.Count; j++)
                     {
-                        tmsStatePerSlot[i].Add(config.ProcessStates[i][config.TransactionManagers[j].Id].Crashed);
+                        tmsStatePerSlot[i].Add(statePerSlot[i].Crashed);
                     }
-                    tmsSuspectedPerSlot[i] = config.ProcessStates[i][processId].Suspects; // getting the tms that each tm suspects PER slot. i = slotId
+                    tmsSuspectedPerSlot[i] = statePerSlot[i].Suspects; // getting the tms that each tm suspects PER slot. i = slotId
                 }
 
             }
             int processIndex = config.TransactionManagers.FindIndex(x => x.Id == processId);
+            List<string> processBook = config.TransactionManagers.Select(x => x.Id).ToList();
 
-            ServerService serverService = new(processId, transactionManagers, leaseManagers, tmsStatePerSlot, tmsSuspectedPerSlot, processIndex);
+            ServerService serverService = new(processId, transactionManagers, leaseManagers, tmsStatePerSlot, tmsSuspectedPerSlot, processIndex, processBook);
 
             Server server = new Server
             {
                 Services = {
                     Client_TransactionManagerService.BindService(new TMService(serverService)),
-                    TwoPhaseCommit.BindService(new TwoPhaseCommitService(serverService)),
+                    Gossip.BindService(new GossipService(serverService)),
                 },
                 Ports = { new ServerPort(host, port, ServerCredentials.Insecure) }
             };
