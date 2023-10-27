@@ -11,9 +11,6 @@ namespace TKVTransactionManager
     internal class Program
     {
         static Timer timer;
-
-        // TODO: change this back before submitting
-
         static private void SetSlotTimer(TimeSpan time, int slotDuration, ServerService serverService)
         {
             TimeSpan timeToGo = TimeSpan.Zero;

@@ -89,7 +89,7 @@ namespace TKVTransactionManager.Services
             _processBook = processBook;
 
             _isCrashed = false;
-            _currentSlot = -1; // begin at -1 so that the first slot is 0 :)
+            _currentSlot = -1; // begin at -1 so that the first slot is 0
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _leasesHeld = new List<Lease>();
                 
@@ -119,7 +119,7 @@ namespace TKVTransactionManager.Services
                 return;
             }
 
-            Console.WriteLine("========== Preparing new slot =========================");
+            Console.WriteLine("================ Preparing new slot =========================");
 
             // get process state
             _isCrashed = _tmsStatePerSlot[_currentSlot][_processIndex];
@@ -129,7 +129,6 @@ namespace TKVTransactionManager.Services
             // If process is crashed, don't do anything
             if (_isCrashed)
             {
-                //Console.WriteLine("Ending preparation -----------------------");
                 Monitor.Exit(this);
                 return;
             }
@@ -142,9 +141,7 @@ namespace TKVTransactionManager.Services
 
             try
             {
-                Console.WriteLine("Updating Transaction Log");
                 UpdateTransactionLogStatus();
-                Console.WriteLine("Requesting a Paxos Update");
                 AskForLeaseManagersStatus();
             }
             catch (MajorityInsufficiencyException e)
@@ -213,7 +210,6 @@ namespace TKVTransactionManager.Services
             // if TM doesn't have all leases, it must request them
             if (transactionState.Permissions.Where(perm => !perm.Item2).Count() > 0)
             {
-                Console.WriteLine($"Requesting leases...");
                 var lease = new Lease { Id = _processId };
                 lease.Permissions.AddRange(transactionState.Permissions.Where(perm => !perm.Item2).Select(perm => perm.Item1)); // get perms not yet obtained
                 var leaseRequest = new LeaseRequest { Slot = _currentSlot, Lease = lease };
@@ -264,7 +260,6 @@ namespace TKVTransactionManager.Services
 
         public void AskForLeaseManagersStatus()
         {
-            Console.WriteLine("Requesting status update from lease managers...");
             var statusUpdateResponse = new StatusUpdateResponse();
             var tasks = new List<Task>();
 
@@ -293,10 +288,6 @@ namespace TKVTransactionManager.Services
 
             Monitor.Enter(this);
 
-            //Console.WriteLine($"Received status update from lease managers");
-
-            Console.WriteLine($"    Got ({statusUpdateResponse.Leases.Count}) Leases.");
-
             // check for conflicting leases. a lease is in conflict if a TM holds a lease for a key that was given as permission to another TM in a later Lease.
             // if the lease is in conflict, this TM should release the Lease it holds. 
 
@@ -311,9 +302,6 @@ namespace TKVTransactionManager.Services
                  Before executing we first need to Gossip the transaction to all other TMs.
                  Then we are done! Just to do this for all transactions that we have stored.
              */
-
-            // TODO: Store the transactions somewhere until the next turn if we can't execute them. Or just abort them.
-            // TODO: Check if all conditions are okay and that we can execute.
 
             CheckLeaseConflicts(statusUpdateResponse);
 
@@ -331,9 +319,6 @@ namespace TKVTransactionManager.Services
                     permissionsRequired.AddRange(transactionState.Request.Writes.Select(dadint => dadint.Key));
 
                     var leasesToWaitOn = new List<Lease>();
-
-                    // check this isn't stupid
-                    //  i like this, makes sense to me! footvaalvica 👍
                     for (var i = 0; i < statusUpdateResponse.Leases.Count; i++)
                     {
                         // if lease ain't for this tm or not related to this transaction, continue
@@ -402,11 +387,6 @@ namespace TKVTransactionManager.Services
                     {
                         Console.WriteLine(e.Message);
                     }
-
-                    // TODO: cant wait on all of them as we don't know which ones are crashed :pensive:
-                    // if we suspect them, then we ask for a majority to of other TMs on what they think of the suspected TMs
-                    // if a majority of them think that the TM is crashed, then we can use our superseding lease and execute the transaction
-                    // otherwise, we wait for the next slot to try again (think about this bit better)
                     try
                     {
                         Task.WaitAll(tasks2.ToArray());
@@ -467,7 +447,7 @@ namespace TKVTransactionManager.Services
 
         public bool SuspicionConsensus(string suspectedId)
         {
-            int agreeingProcesses = 1; // me!
+            int agreeingProcesses = 1;
             var tasks = new List<Task>();
 
             if (_reachableTMs.Count < _transactionManagers.Count / 2)
@@ -489,7 +469,6 @@ namespace TKVTransactionManager.Services
                 tasks.Add(t);
             }
 
-            // TODO should change everywhere to check if majority can be established in the first place
             try
             {
                 for (var i = 0; i < _transactionManagers.Count / 2; i++)
@@ -514,7 +493,7 @@ namespace TKVTransactionManager.Services
 
         public void ExecuteTransaction(TransactionState transactionState)
         {
-            Console.WriteLine($"Finally executing transaction...");
+            Console.WriteLine($"Executing transaction...");
             foreach (var dadintKey in transactionState.Request.Reads)
             {
                 if (_transactionManagerDadInts.TryGetValue(dadintKey, out var dadint))
@@ -550,22 +529,17 @@ namespace TKVTransactionManager.Services
                 {
                     _transactionManagerDadInts.Add(dadint.Key, new DADInt { Key = dadint.Key, Value = dadint.Value });
                 }
-
                 _writeLog.Add(dadint);
             }
         }
 
         public void TwoPhaseCommit(TransactionState transactionState)
         {
-            Console.WriteLine("$Sending Prepare to all tms...");
             List<Task> tasks = new List<Task>();
             var prepareResponses = new List<PrepareResponse>();
             
-            //int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 +1: _transactionManagers.Count() / 2; // TODO: isnt it always /2+1 actually?
-            // counting with self
             if (_reachableTMs.Count < _transactionManagers.Count / 2)
             {
-                Console.WriteLine("Not enough processes to reach a majority, aborting update...");
                 throw new MajorityInsufficiencyException();
             }
 
@@ -671,7 +645,6 @@ namespace TKVTransactionManager.Services
             var tasks = new List<Task>();
             var responses = new List<UpdateResponse>();
 
-            //int tmMajority = (_transactionManagers.Count() % 2 == 0) ? _transactionManagers.Count() / 2 + 1: _transactionManagers.Count() / 2; // todo: isnt it always /2+1
             if (_reachableTMs.Count < _transactionManagers.Count / 2)
             {
                 Console.WriteLine("Not enough processes to reach a majority, aborting update...");
@@ -710,12 +683,6 @@ namespace TKVTransactionManager.Services
                 throw new SlotExecutionTimeoutException();
             }
 
-            // TODO: doesn't work, but once we get a majority, we ignore the rest of the responses
-            ////foreach (var task in tasks)
-            ////{
-            ////    task.Dispose();
-            ////}
-
             Monitor.Enter(this);
             // group responses by size and get the biggest group
             var biggestLog = responses.GroupBy(response => response.Writes.Count).OrderByDescending(group => group.Count()).First().ToList().MostCommon();
@@ -735,10 +702,7 @@ namespace TKVTransactionManager.Services
         {
             Monitor.Enter(this);
 
-            // TODO: not give up all leases
             _leasesHeld = new List<Lease>();
-
-            // TODO: does this completely reset the TM
             _transactionManagerDadInts = new Dictionary<string, DADInt>();
             _dadIntsRead = new List<DADInt>();
             _transactionsState.ForEach(_leasesHeld => _leasesHeld.Permissions.ForEach(perm => perm.Item2 = false)); // reset permissions for transactions

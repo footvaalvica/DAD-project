@@ -3,7 +3,6 @@ using Utilities;
 using ClientTransactionManagerProto;
 using ClientLeaseManagerProto;
 using System.Text.RegularExpressions;
-using Grpc.Core;
 
 namespace TKVClient
 {
@@ -34,7 +33,7 @@ namespace TKVClient
                             return;
                         }
 
-                        //Sleep for a shorter interval to make the check more responsive
+                        // Sleep for a shorter interval to make the check more responsive
                         Thread.Sleep(100);
                     }
                     Console.WriteLine("Wait completed.");
@@ -50,7 +49,7 @@ namespace TKVClient
             }
         }
 
-        static void Status()
+        static bool Status()
         {
             StatusRequestTM requestTM = new StatusRequestTM();
 
@@ -94,6 +93,8 @@ namespace TKVClient
 
                 tasksLMs.Add(t);
             }
+
+            return true;
         }
 
         static List<DADInt> TxSubmit(string id, List<String> reads, List<DADInt> writes)
@@ -129,7 +130,6 @@ namespace TKVClient
                     Console.WriteLine(e.Status);
                     indexTM = (++indexTM) % transactionManagers.Count;
                     tm = config.TransactionManagers[indexTM].Id;
-                    //Console.WriteLine($"TM is now {tm}");
                 }
             }   
 
@@ -144,11 +144,6 @@ namespace TKVClient
                 string[] reads = command[1].Substring(1, command[1].Length - 2)
                     .Split(',', StringSplitOptions.RemoveEmptyEntries);
                 reads = reads.Select(read => read.Trim('"')).ToArray();
-
-                foreach (string read in reads)
-                {
-                    //Console.WriteLine("DADINT: [" + read + "]");
-                }
 
                 Regex rg = new Regex(@"<""([^""]+)"",(\d+)>");
                 MatchCollection matched = rg.Matches(command[2]);
@@ -167,10 +162,7 @@ namespace TKVClient
                         string number = match.Groups[i + 1].Value;
                         try
                         {
-                            //Console.WriteLine("DADINT: [" + key + ", " + number + "]");
-
                             writesList.Add(new DADInt { Key = key, Value = int.Parse(number) });
-
                         }
                         catch (FormatException)
                         {
@@ -182,7 +174,7 @@ namespace TKVClient
                 List<DADInt> dadintsRead = TxSubmit(processId, reads.ToList(), writesList);
                 foreach (DADInt dadint in dadintsRead)
                 {
-                    Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]");
+                    Console.WriteLine("DADINT: [" + dadint.Key + ", " + dadint.Value + "]"); // Print DadInts Read by TM
                 }
             }
             else { Console.WriteLine("Invalid number of arguments provided for transaction request."); }
@@ -210,7 +202,7 @@ namespace TKVClient
                     break;
                 case "s":
                     Console.WriteLine("Sending status request...");
-                    Status();
+                    _ = Status();
                     break;
                 case "q":
                     Console.WriteLine("Closing client...");
@@ -307,7 +299,6 @@ namespace TKVClient
 
             // Optional: Read the key to clear the input buffer and exit
             Console.ReadKey(intercept: true);
-
         }
     }
 }
