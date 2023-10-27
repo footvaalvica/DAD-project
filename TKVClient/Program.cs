@@ -64,7 +64,7 @@ namespace TKVClient
                     }
                     catch (Grpc.Core.RpcException e)
                     {
-                        Console.WriteLine(e.Status);
+                        // 
                     }
 
                     return Task.CompletedTask;
@@ -85,7 +85,7 @@ namespace TKVClient
                     }
                     catch (Grpc.Core.RpcException e)
                     {
-                        Console.WriteLine(e.Status);
+                        //
                     }
 
                     return Task.CompletedTask;
@@ -197,7 +197,6 @@ namespace TKVClient
                     Wait(commandArgs);
                     break;
                 case "t":
-                    Console.WriteLine("Processing transaction request...");
                     TransactionRequest(commandArgs, processId);
                     break;
                 case "s":
