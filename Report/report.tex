@@ -107,7 +107,7 @@ concurrent data access.\\
 In the context of DADTKV, transactional operations are at the core of managing 
 shared data and ensuring consistency across distributed environments. The system 
 provides two fundamental methods, TxSubmit and Status, within its client library 
-to facilitate transaction processing and monitor transaction states. The sequence 
+to facilitate transaction processing and monitor transaction states. In our tests, the sequence 
 of operations executed by each client is predefined by the script which is executed 
 sequentially and in loop until the program is closed. The script also includes a 
 "wait" instruction (for a number of milliseconds) in order to insert a waiting time 
@@ -277,7 +277,7 @@ it relinquishes all held leases and aligns its local log with
 the most extensive and common log received.
 
 Finally, the Transaction Manager contacts the Lease Managers for 
-a State Update to obtain newly assigned leases. After acquiring 
+a Status Update to obtain newly assigned leases. After acquiring 
 these leases, the manager checks for conflicting leases and 
 reviews pending transactions. If the manager possesses the necessary 
 leases to execute a transaction and there are no conflicting leases 
@@ -311,7 +311,7 @@ above.
             \EndIf
         \EndFunction
         \Function{AskLeaseManagersForUpdate}{}
-            \State $request \gets new UpdateStautsRequest()$
+            \State $request \gets new UpdateStatusRequest()$
             \ForAll{LeaseManagers}
                 \State sendUpdateStatusRequest(request)
             \EndFor
@@ -326,8 +326,7 @@ above.
 \end{algorithm}
 
 \SubSection{Implementation Decisions}
-In our implementation, we opted for the Two-Phase Commit protocol 
-over gossip for several compelling reasons. Firstly, our system 
+In our implementation, we opted for a modified Two-Phase Commit protocol over a single-phase commit for several compelling reasons. Firstly, our system 
 demands strong consistency and transactional guarantees, even if 
 it means accommodating potential blocking and heightened latency 
 associated with synchronous coordination. Two-Phase Commit ensures 
@@ -337,7 +336,7 @@ This property is paramount to maintaining the system's correctness
 and preventing inconsistencies.
 
 To balance the need for consistency with client expectations of 
-low latencies and high availability, we devised a modified version
+low latencies and high availability, we devised a version
 of the protocol using majorities. When our processes communicate 
 with clients, they wait for a majority of "Ok" responses from Prepare 
 Requests before proceeding with transactions. This method grants our
